@@ -1,5 +1,5 @@
 // src/contexts/AppContext.js
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import authService from '../services/authService';
 import permissionService from '../services/permissionService';
 import api from '../services/api';
@@ -135,16 +135,16 @@ const appReducer = (state, action) => {
     
     // Works
     case ActionTypes.SET_WORKS:
-      const works = action.payload;
-      const stats = {
-        total: works.length,
-        inProgress: works.filter(w => w.status_code !== 'completed').length,
-        completed: works.filter(w => w.status_code === 'completed').length
+      const worksData = action.payload || [];
+      const workStats = {
+        total: worksData.length,
+        inProgress: worksData.filter(w => w.status_code !== 'completed').length,
+        completed: worksData.filter(w => w.status_code === 'completed').length
       };
       return {
         ...state,
-        works: works,
-        workStats: stats,
+        works: worksData,
+        workStats: workStats,
         worksLoading: false,
         worksError: null
       };
@@ -337,21 +337,38 @@ const AppContext = createContext(null);
 // Provider Component
 export const AppProvider = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  
+  // Mount kontrolü için ref
+  const isMounted = useRef(false);
+  const abortControllerRef = useRef(null);
 
   // Initialize auth state
   useEffect(() => {
-    const user = authService.getCurrentUser();
-    const isAuthenticated = authService.isAuthenticated();
-    
-    if (isAuthenticated && user) {
-      dispatch({
-        type: ActionTypes.SET_AUTH,
-        payload: { user, isAuthenticated }
-      });
+    // İlk mount'ta çalışsın
+    if (!isMounted.current) {
+      isMounted.current = true;
       
-      // Load permissions
-      loadPermissions();
+      const user = authService.getCurrentUser();
+      const isAuthenticated = authService.isAuthenticated();
+      
+      if (isAuthenticated && user) {
+        dispatch({
+          type: ActionTypes.SET_AUTH,
+          payload: { user, isAuthenticated }
+        });
+        
+        // Load system permissions only
+        loadSystemPermissions();
+      }
     }
+    
+    // Cleanup
+    return () => {
+      // Tüm pending istekleri iptal et
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, []);
 
   // Context Actions
@@ -370,8 +387,8 @@ export const AppProvider = ({ children }) => {
             }
           });
           
-          // Load permissions after login
-          await loadPermissions();
+          // Load system permissions after login
+          await loadSystemPermissions();
           
           return { success: true };
         }
@@ -388,22 +405,48 @@ export const AppProvider = ({ children }) => {
     },
     
     // Permission Actions
-    loadPermissions: async () => {
+    loadSystemPermissions: async () => {
       try {
-        const [workPerms, sysPerms] = await Promise.all([
-          permissionService.getMyWorkPermissions(),
-          api.get('/permissions/my-system-permissions/')
-        ]);
+        // Yeni bir AbortController oluştur
+        const abortController = new AbortController();
+        abortControllerRef.current = abortController;
         
+        const response = await api.get('/permissions/my-system-permissions/', {
+          signal: abortController.signal
+        });
+        
+        // İptal edilmediyse state'i güncelle
+        if (!abortController.signal.aborted && response.data.success) {
+          dispatch({
+            type: ActionTypes.SET_PERMISSIONS,
+            payload: {
+              systemPermissions: response.data.data
+            }
+          });
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          console.error('System permissions load error:', error);
+        }
+      }
+    },
+    
+    loadWorkPermissions: async () => {
+      // Eğer zaten work permissions yüklüyse, tekrar yükleme
+      if (state.workPermissions && Object.keys(state.workPermissions).length > 0) {
+        return;
+      }
+      
+      try {
+        const workPerms = await permissionService.getMyWorkPermissions();
         dispatch({
           type: ActionTypes.SET_PERMISSIONS,
           payload: {
-            workPermissions: workPerms,
-            systemPermissions: sysPerms.data.success ? sysPerms.data.data : state.systemPermissions
+            workPermissions: workPerms
           }
         });
       } catch (error) {
-        console.error('Permissions load error:', error);
+        console.error('Work permissions load error:', error);
       }
     },
     
@@ -412,19 +455,28 @@ export const AppProvider = ({ children }) => {
       dispatch({ type: ActionTypes.SET_WORKS_LOADING, payload: true });
       
       try {
-        const response = await api.get('/workflows/');
-        if (response.data.success) {
+        // Yeni bir AbortController oluştur
+        const abortController = new AbortController();
+        abortControllerRef.current = abortController;
+        
+        const response = await api.get('/workflows/', {
+          signal: abortController.signal
+        });
+        
+        if (!abortController.signal.aborted && response.data.success) {
           dispatch({
             type: ActionTypes.SET_WORKS,
             payload: response.data.data
           });
         }
       } catch (error) {
-        dispatch({
-          type: ActionTypes.SET_WORKS_ERROR,
-          payload: error.message
-        });
-        showToast('İşler yüklenirken hata oluştu', 'error');
+        if (error.name !== 'AbortError') {
+          dispatch({
+            type: ActionTypes.SET_WORKS_ERROR,
+            payload: error.message
+          });
+          showToast('İşler yüklenirken hata oluştu', 'error');
+        }
       }
     },
     
@@ -480,74 +532,114 @@ export const AppProvider = ({ children }) => {
       dispatch({ type: ActionTypes.SET_MOVEMENTS_LOADING, payload: true });
       
       try {
-        const response = await api.get('/movements/');
-        if (response.data.success) {
+        const abortController = new AbortController();
+        abortControllerRef.current = abortController;
+        
+        const response = await api.get('/movements/', {
+          signal: abortController.signal
+        });
+        
+        if (!abortController.signal.aborted && response.data.success) {
           dispatch({
             type: ActionTypes.SET_MOVEMENTS,
             payload: response.data.data
           });
         }
       } catch (error) {
-        dispatch({
-          type: ActionTypes.SET_MOVEMENTS_ERROR,
-          payload: error.message
-        });
-        
-        if (error.response?.status !== 403) {
-          showToast('Hareketler yüklenirken hata oluştu', 'error');
+        if (error.name !== 'AbortError') {
+          dispatch({
+            type: ActionTypes.SET_MOVEMENTS_ERROR,
+            payload: error.message
+          });
+          
+          if (error.response?.status !== 403) {
+            showToast('Hareketler yüklenirken hata oluştu', 'error');
+          }
         }
       }
     },
     
     // User & Role Actions
     fetchUsers: async () => {
+      // Eğer zaten yüklüyorsa tekrar yükleme
+      if (state.usersLoading) return;
+      
       dispatch({ type: ActionTypes.SET_USERS_LOADING, payload: true });
       
       try {
-        const response = await api.get('/auth/users/');
-        if (response.data.success) {
+        const abortController = new AbortController();
+        abortControllerRef.current = abortController;
+        
+        const response = await api.get('/auth/users/', {
+          signal: abortController.signal
+        });
+        
+        if (!abortController.signal.aborted && response.data.success) {
           const users = response.data.data?.data || response.data.data || [];
           dispatch({ type: ActionTypes.SET_USERS, payload: users });
         }
       } catch (error) {
-        showToast('Kullanıcılar yüklenirken hata oluştu', 'error');
+        if (error.name !== 'AbortError') {
+          showToast('Kullanıcılar yüklenirken hata oluştu', 'error');
+        }
       }
     },
     
     fetchRoles: async () => {
+      // Eğer zaten yüklüyorsa tekrar yükleme
+      if (state.rolesLoading) return;
+      
       dispatch({ type: ActionTypes.SET_ROLES_LOADING, payload: true });
       
       try {
-        const response = await api.get('/permissions/roles/');
-        if (response.data.success) {
+        const abortController = new AbortController();
+        abortControllerRef.current = abortController;
+        
+        const response = await api.get('/permissions/roles/', {
+          signal: abortController.signal
+        });
+        
+        if (!abortController.signal.aborted && response.data.success) {
           dispatch({ type: ActionTypes.SET_ROLES, payload: response.data.data });
         }
       } catch (error) {
-        showToast('Roller yüklenirken hata oluştu', 'error');
+        if (error.name !== 'AbortError') {
+          showToast('Roller yüklenirken hata oluştu', 'error');
+        }
       }
     },
     
     // Dropdown Actions
     fetchDropdowns: async () => {
+      // Eğer zaten yüklüyorsa tekrar yükleme
+      if (state.dropdownsLoading) return;
+      
       dispatch({ type: ActionTypes.SET_DROPDOWNS_LOADING, payload: true });
       
       try {
+        const abortController = new AbortController();
+        abortControllerRef.current = abortController;
+        
         const [catResponse, typeResponse, channelResponse] = await Promise.all([
-          api.get('/categories/'),
-          api.get('/work-types/'),
-          api.get('/sales-channels/')
+          api.get('/categories/', { signal: abortController.signal }),
+          api.get('/work-types/', { signal: abortController.signal }),
+          api.get('/sales-channels/', { signal: abortController.signal })
         ]);
         
-        dispatch({
-          type: ActionTypes.SET_DROPDOWNS,
-          payload: {
-            categories: catResponse.data.success ? catResponse.data.data : [],
-            workTypes: typeResponse.data.success ? typeResponse.data.data : [],
-            salesChannels: channelResponse.data.success ? channelResponse.data.data : []
-          }
-        });
+        if (!abortController.signal.aborted) {
+          dispatch({
+            type: ActionTypes.SET_DROPDOWNS,
+            payload: {
+              categories: catResponse.data.success ? catResponse.data.data : [],
+              workTypes: typeResponse.data.success ? typeResponse.data.data : [],
+              salesChannels: channelResponse.data.success ? channelResponse.data.data : []
+            }
+          });
+        }
       } catch (error) {
-        console.error('Dropdown verileri yüklenirken hata:', error);
+        if (error.name !== 'AbortError') {
+          console.error('Dropdown verileri yüklenirken hata:', error);
+        }
       }
     },
     
@@ -585,8 +677,9 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // Helper function for permissions
-  const loadPermissions = actions.loadPermissions;
+  // Helper functions
+  const loadSystemPermissions = actions.loadSystemPermissions;
+  const loadWorkPermissions = actions.loadWorkPermissions;
   const showToast = actions.showToast;
 
   // Combine state and actions

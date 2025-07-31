@@ -1,5 +1,5 @@
 // src/components/DropdownManager.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDropdowns, useUI } from '../hooks';
 import api from '../services/api';
 import './DropdownManager.css';
@@ -12,12 +12,19 @@ const DropdownManager = ({ title, endpoint, onUpdate }) => {
   const [formData, setFormData] = useState({ name: '' });
   const [error, setError] = useState('');
   
+  // Mount kontrolü için ref
+  const isMounted = useRef(false);
+  
   // Context hooks
   const { fetchDropdowns } = useDropdowns();
   const { showToast } = useUI();
 
   useEffect(() => {
-    fetchItems();
+    // İlk mount'ta çalışsın
+    if (!isMounted.current) {
+      isMounted.current = true;
+      fetchItems();
+    }
   }, [endpoint]);
 
   const fetchItems = async () => {

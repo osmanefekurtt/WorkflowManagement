@@ -5,7 +5,7 @@ import UserModal from '../components/UserModal';
 import RoleModal from '../components/RoleModal';
 import ToastContainer from '../components/ToastContainer';
 import DropdownManager from '../components/DropdownManager';
-import { useUsersAndRoles, useUI } from '../hooks';
+import { useUsersAndRoles, useUI, useOnce } from '../hooks';
 import api from '../services/api';
 import './Settings.css';
 
@@ -31,6 +31,7 @@ const Settings = () => {
     toggleModal
   } = useUI();
 
+  // Tab değiştiğinde veri yükle
   useEffect(() => {
     if (activeTab === 'users') {
       fetchUsers();

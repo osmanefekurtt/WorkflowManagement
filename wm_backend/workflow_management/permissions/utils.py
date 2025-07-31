@@ -128,8 +128,15 @@ class PermissionChecker:
             if field in permissions and permissions[field] in ['read', 'write']:
                 filtered_data[field] = value
         
-        # Her zaman görülebilecek sistem alanları
-        system_fields = ['id', 'created', 'updated', 'status_code', 'status_text', 'status_color']
+        # Her zaman görülebilecek sistem alanları ve ilişkili alanlar
+        system_fields = [
+            'id', 'created', 'updated', 
+            'status_code', 'status_text', 'status_color',
+            # Detail alanlarını da ekle
+            'category_detail', 'type_detail', 'sales_channel_detail',
+            'category_name', 'type_name', 'sales_channel_name'
+        ]
+        
         for field in system_fields:
             if field in data:
                 filtered_data[field] = data[field]

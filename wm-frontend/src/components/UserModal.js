@@ -16,9 +16,16 @@ const UserModal = ({ isOpen, onClose, onSave, user = null }) => {
     roles: []
   });
   
-  const { roles } = useUsersAndRoles();
+  const { roles, fetchRoles } = useUsersAndRoles();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // Modal açıldığında rolleri yükle
+  useEffect(() => {
+    if (isOpen && roles.length === 0) {
+      fetchRoles();
+    }
+  }, [isOpen]);
 
   // User verisi gelirse formu doldur
   useEffect(() => {

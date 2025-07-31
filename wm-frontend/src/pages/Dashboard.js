@@ -1,18 +1,19 @@
 // src/pages/Dashboard.js
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
 import WorkForm from '../components/WorkForm';
 import ToastContainer from '../components/ToastContainer';
-import { useDashboard, useAuth } from '../hooks';
+import { useDashboard, useAuth, useOnce } from '../hooks';
+import api from '../services/api';
 import './Dashboard.css';
 
 const Dashboard = () => {
   const { user } = useAuth();
   const {
     // Works
-    filteredWorks,
+    works,
     loading: worksLoading,
     stats,
     fetchWorks,
@@ -22,9 +23,8 @@ const Dashboard = () => {
     selectedWork,
     setSelectedWork,
     
-    // Permissions
-    canCreateWork,
-    canDeleteWork,
+    // Permissions - Context'ten geliyor
+    systemPermissions,
     
     // UI
     toasts,
@@ -36,25 +36,99 @@ const Dashboard = () => {
     setFilter,
     
     // Dropdowns
+    categories,
+    workTypes,
+    salesChannels,
     fetchDropdowns
   } = useDashboard();
   
   const [isNewWork, setIsNewWork] = useState(false);
   const [saving, setSaving] = useState(false);
   const [workToDelete, setWorkToDelete] = useState(null);
+  
+  // Local sistem izinleri state'i
+  const [localSystemPermissions, setLocalSystemPermissions] = useState({
+    work_create: false,
+    work_delete: false
+  });
 
-  useEffect(() => {
-    // Initial data fetch
+  // İlk yükleme - sadece bir kere çalışır
+  useOnce(() => {
     fetchWorks();
     fetchDropdowns();
-    
-    // Auto refresh every 10 seconds
+    checkUserPermissions();
+  });
+
+  // Sistem izinlerini kontrol et
+  const checkUserPermissions = async () => {
+    try {
+      const response = await api.get('/permissions/my-system-permissions/');
+      console.log('System permissions response:', response.data);
+      
+      if (response.data.success) {
+        setLocalSystemPermissions({
+          work_create: response.data.data.work_create || false,
+          work_delete: response.data.data.work_delete || false
+        });
+      }
+    } catch (error) {
+      console.error('Sistem izinleri alınırken hata:', error);
+    }
+  };
+
+  // Auto refresh every 10 seconds
+  useEffect(() => {
     const interval = setInterval(() => {
       fetchWorks();
     }, 10000);
     
     return () => clearInterval(interval);
   }, []);
+
+  // Filtrelenmiş işler
+  const filteredWorks = useMemo(() => {
+    return works.filter(work => {
+      if (filters.workStatus === 'active') {
+        return work.status_code !== 'completed';
+      } else {
+        return work.status_code === 'completed';
+      }
+    });
+  }, [works, filters.workStatus]);
+
+  // ID'lerden isimleri bulmak için helper fonksiyonlar
+  const getCategoryName = (categoryId) => {
+    if (!categoryId) return '-';
+    const category = categories.find(c => c.id === categoryId);
+    return category ? category.name : '-';
+  };
+
+  const getTypeName = (typeId) => {
+    if (!typeId) return '-';
+    const type = workTypes.find(t => t.id === typeId);
+    return type ? type.name : '-';
+  };
+
+  const getSalesChannelName = (salesChannelId) => {
+    if (!salesChannelId) return '-';
+    const channel = salesChannels.find(sc => sc.id === salesChannelId);
+    return channel ? channel.name : '-';
+  };
+
+  // Works listesini dropdown isimleriyle zenginleştir
+  const enrichedWorks = useMemo(() => {
+    return filteredWorks.map(work => ({
+      ...work,
+      // Eğer detail alanları yoksa, ID'lerden isimleri bul
+      category_name: work.category_name || work.category_detail?.name || getCategoryName(work.category),
+      type_name: work.type_name || work.type_detail?.name || getTypeName(work.type),
+      sales_channel_name: work.sales_channel_name || work.sales_channel_detail?.name || getSalesChannelName(work.sales_channel)
+    }));
+  }, [filteredWorks, categories, workTypes, salesChannels]);
+
+  // İzin kontrolleri
+  const canCreateWork = user?.is_superuser || localSystemPermissions.work_create || systemPermissions?.work_create;
+  const canDeleteWork = user?.is_superuser || localSystemPermissions.work_delete || systemPermissions?.work_delete;
 
   const handleWorkClick = (work) => {
     setSelectedWork(work);
@@ -109,6 +183,13 @@ const Dashboard = () => {
     toggleModal('confirmModal', false);
     setWorkToDelete(null);
   };
+
+  // Debug için
+  console.log('Works:', works);
+  console.log('Filtered Works:', filteredWorks);
+  console.log('Enriched Works:', enrichedWorks);
+  console.log('Can Create:', canCreateWork);
+  console.log('Can Delete:', canDeleteWork);
 
   return (
     <Layout>
@@ -190,7 +271,7 @@ const Dashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredWorks.map((work, index) => (
+                  {enrichedWorks.map((work, index) => (
                     <tr 
                       key={work.id} 
                       className="work-row"
@@ -198,10 +279,10 @@ const Dashboard = () => {
                     >
                       <td>{index + 1}</td>
                       <td className="work-name">{work.name || '-'}</td>
-                      <td>{work.category_name || work.category_detail?.name || '-'}</td>
+                      <td>{work.category_name || '-'}</td>
                       <td>{work.price ? `${work.price} TL` : '-'}</td>
-                      <td>{work.type_name || work.type_detail?.name || '-'}</td>
-                      <td>{work.sales_channel_name || work.sales_channel_detail?.name || '-'}</td>
+                      <td>{work.type_name || '-'}</td>
+                      <td>{work.sales_channel_name || '-'}</td>
                       <td>
                         <span 
                           className="status-badge" 
@@ -215,7 +296,7 @@ const Dashboard = () => {
                 </tbody>
               </table>
               
-              {filteredWorks.length === 0 && (
+              {enrichedWorks.length === 0 && (
                 <div className="no-data">
                   {filters.workStatus === 'active' 
                     ? 'Devam eden iş bulunmamaktadır.' 

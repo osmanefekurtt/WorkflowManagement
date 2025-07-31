@@ -3,6 +3,11 @@ import { useApp } from '../contexts/AppContext';
 import { useCallback, useMemo } from 'react';
 import permissionService from '../services/permissionService';
 
+// Export context hooks
+export { useApp } from '../contexts/AppContext';
+// Export useOnce hook
+export { useOnce } from './useOnce';
+
 // Auth Hook
 export const useAuth = () => {
   const { state, actions } = useApp();

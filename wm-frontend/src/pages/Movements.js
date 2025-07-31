@@ -2,7 +2,7 @@
 import React, { useEffect } from 'react';
 import Layout from '../components/Layout';
 import ToastContainer from '../components/ToastContainer';
-import { useMovements, useUI, useAuth } from '../hooks';
+import { useMovements, useUI, useAuth, useOnce } from '../hooks';
 import './Movements.css';
 
 const Movements = () => {
@@ -20,7 +20,8 @@ const Movements = () => {
     setFilter 
   } = useUI();
 
-  useEffect(() => {
+  // İlk yükleme - sadece bir kere çalışır
+  useOnce(() => {
     // Staff değilse dashboard'a yönlendir
     if (!user?.is_staff) {
       showToast('Bu sayfayı görüntüleme yetkiniz yok.', 'error');
@@ -31,13 +32,17 @@ const Movements = () => {
     }
     
     fetchMovements();
-    
-    // Her 10 saniyede bir veriyi yenile
-    const interval = setInterval(() => {
-      fetchMovements();
-    }, 10000);
-    
-    return () => clearInterval(interval);
+  });
+
+  // Auto refresh every 10 seconds
+  useEffect(() => {
+    if (user?.is_staff) {
+      const interval = setInterval(() => {
+        fetchMovements();
+      }, 10000);
+      
+      return () => clearInterval(interval);
+    }
   }, [user]);
 
   const getActionIcon = (action) => {

@@ -1,6 +1,6 @@
 // src/components/WorkForm.js
 import React, { useState, useEffect } from 'react';
-import { usePermissions, useDropdowns } from '../hooks';
+import { usePermissions, useDropdowns, useApp, useOnce } from '../hooks';
 import './WorkForm.css';
 
 const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
@@ -29,10 +29,22 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
   // Context'ten dropdown verileri ve yetkiler
   const { categories, workTypes, salesChannels, loading: dropdownsLoading } = useDropdowns();
   const { workPermissions, canReadField, canWriteField, hasFieldPermission } = usePermissions();
+  const { actions } = useApp();
   
   // Orijinal veriyi sakla
   const [originalData, setOriginalData] = useState(null);
-  const [loadingPermissions, setLoadingPermissions] = useState(false);
+  const [loadingPermissions, setLoadingPermissions] = useState(true);
+
+  // Component mount olduğunda work permissions'ı yükle - sadece bir kere
+  useOnce(() => {
+    const loadPermissions = async () => {
+      setLoadingPermissions(true);
+      await actions.loadWorkPermissions();
+      setLoadingPermissions(false);
+    };
+    
+    loadPermissions();
+  });
 
   useEffect(() => {
     if (work) {
