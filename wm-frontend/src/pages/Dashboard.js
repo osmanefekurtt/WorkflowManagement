@@ -1,112 +1,75 @@
 // src/pages/Dashboard.js
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
 import WorkForm from '../components/WorkForm';
 import ToastContainer from '../components/ToastContainer';
-import useToast from '../hooks/useToast';
-import api from '../services/api';
-import authService from '../services/authService';
+import { useDashboard, useAuth } from '../hooks';
 import './Dashboard.css';
 
 const Dashboard = () => {
-  const [works, setWorks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedWork, setSelectedWork] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { user } = useAuth();
+  const {
+    // Works
+    filteredWorks,
+    loading: worksLoading,
+    stats,
+    fetchWorks,
+    createWork,
+    updateWork,
+    deleteWork,
+    selectedWork,
+    setSelectedWork,
+    
+    // Permissions
+    canCreateWork,
+    canDeleteWork,
+    
+    // UI
+    toasts,
+    showToast,
+    removeToast,
+    toggleModal,
+    modals,
+    filters,
+    setFilter,
+    
+    // Dropdowns
+    fetchDropdowns
+  } = useDashboard();
+  
   const [isNewWork, setIsNewWork] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [filterStatus, setFilterStatus] = useState('active'); // 'active' veya 'completed'
-  const [stats, setStats] = useState({
-    total: 0,
-    inProgress: 0,
-    completed: 0
-  });
-  
-  // Permission state'i
-  const [systemPermissions, setSystemPermissions] = useState({
-    work_create: false,
-    work_delete: false
-  });
-  
-  // Confirm modal state'leri
-  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [workToDelete, setWorkToDelete] = useState(null);
-  
-  const { toasts, showToast, removeToast } = useToast();
-  const user = authService.getCurrentUser();
 
   useEffect(() => {
+    // Initial data fetch
     fetchWorks();
-    checkUserPermissions();
+    fetchDropdowns();
     
-    // Her 10 saniyede bir veriyi yenile
+    // Auto refresh every 10 seconds
     const interval = setInterval(() => {
       fetchWorks();
-    }, 10000); // 10000 ms = 10 saniye
+    }, 10000);
     
-    // Component unmount olduğunda interval'i temizle
     return () => clearInterval(interval);
   }, []);
-
-  const checkUserPermissions = async () => {
-    try {
-      const response = await api.get('/permissions/my-system-permissions/');
-      console.log('System permissions response:', response.data); // Debug için
-      
-      if (response.data.success) {
-        setSystemPermissions({
-          work_create: response.data.data.work_create || false,
-          work_delete: response.data.data.work_delete || false
-        });
-      }
-    } catch (error) {
-      console.error('Sistem izinleri alınırken hata:', error);
-    }
-  };
-
-  const fetchWorks = async () => {
-    try {
-      const response = await api.get('/workflows/');
-      if (response.data.success) {
-        const worksData = response.data.data;
-        setWorks(worksData);
-        
-        // İstatistikleri hesapla
-        setStats({
-          total: worksData.length,
-          inProgress: worksData.filter(w => w.status_code !== 'completed').length,
-          completed: worksData.filter(w => w.status_code === 'completed').length
-        });
-      }
-    } catch (error) {
-      console.error('İşler yüklenirken hata:', error);
-      // Otomatik yenileme sırasında toast gösterme
-      if (loading) {
-        showToast('İşler yüklenirken bir hata oluştu', 'error');
-      }
-    } finally {
-      if (loading) {
-        setLoading(false);
-      }
-    }
-  };
 
   const handleWorkClick = (work) => {
     setSelectedWork(work);
     setIsNewWork(false);
-    setIsModalOpen(true);
+    toggleModal('workModal', true);
   };
 
   const handleNewWork = () => {
     setSelectedWork(null);
     setIsNewWork(true);
-    setIsModalOpen(true);
+    toggleModal('workModal', true);
   };
 
   const handleCloseModal = () => {
-    setIsModalOpen(false);
+    toggleModal('workModal', false);
     setSelectedWork(null);
     setIsNewWork(false);
   };
@@ -114,45 +77,17 @@ const Dashboard = () => {
   const handleSaveWork = async (workData) => {
     setSaving(true);
     try {
-      let response;
+      let result;
       
       if (isNewWork) {
-        // Yeni iş oluştur
-        response = await api.post('/workflows/', workData);
+        result = await createWork(workData);
       } else {
-        // Mevcut işi güncelle
-        response = await api.patch(`/workflows/${selectedWork.id}/`, workData);
+        result = await updateWork(selectedWork.id, workData);
       }
       
-      if (response.data.success) {
-        // Listeyi yenile
-        await fetchWorks();
+      if (result.success) {
         handleCloseModal();
-        
-        // Başarı bildirimi
-        showToast(
-          isNewWork ? 'İş başarıyla oluşturuldu!' : 'İş başarıyla güncellendi!',
-          'success',
-          2000
-        );
       }
-    } catch (error) {
-      console.error('Kaydetme hatası:', error);
-      
-      // Hata bildirimi
-      let errorMessage = 'Bir hata oluştu. Lütfen tekrar deneyin.';
-      
-      if (error.response?.data?.errors?.field_errors) {
-        // İlk field hatasını göster
-        const firstFieldError = Object.values(error.response.data.errors.field_errors)[0];
-        if (Array.isArray(firstFieldError) && firstFieldError.length > 0) {
-          errorMessage = firstFieldError[0];
-        }
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      }
-      
-      showToast(errorMessage, 'error', 4000);
     } finally {
       setSaving(false);
     }
@@ -160,60 +95,20 @@ const Dashboard = () => {
 
   const handleDeleteWork = (workId) => {
     setWorkToDelete(workId);
-    setConfirmModalOpen(true);
+    toggleModal('confirmModal', true);
   };
 
   const confirmDelete = async () => {
     if (!workToDelete) return;
     
-    try {
-      const response = await api.delete(`/workflows/${workToDelete}/`);
-      
-      // Silme başarılı
-      await fetchWorks();
+    const result = await deleteWork(workToDelete);
+    if (result.success) {
       handleCloseModal();
-      showToast('İş başarıyla silindi!', 'success', 2000);
-    } catch (error) {
-      console.error('Silme hatası:', error);
-      let errorMessage = 'Silme işlemi başarısız oldu.';
-      
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      }
-      
-      showToast(errorMessage, 'error', 4000);
-    } finally {
-      setConfirmModalOpen(false);
-      setWorkToDelete(null);
     }
+    
+    toggleModal('confirmModal', false);
+    setWorkToDelete(null);
   };
-
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'Tamamlandı':
-        return 'status-completed';
-      case 'Devam Eden':
-        return 'status-progress';
-      case 'İptal':
-        return 'status-cancelled';
-      default:
-        return 'status-default';
-    }
-  };
-
-  // Filtrelenmiş işler
-  const filteredWorks = works.filter(work => {
-    if (filterStatus === 'active') {
-      return work.status_code !== 'completed';
-    } else {
-      return work.status_code === 'completed';
-    }
-  });
-
-  // Debug için
-  console.log('User:', user);
-  console.log('System Permissions:', systemPermissions);
-  console.log('Can show create button:', user?.is_superuser || systemPermissions.work_create);
 
   return (
     <Layout>
@@ -224,7 +119,7 @@ const Dashboard = () => {
         {/* Header */}
         <div className="dashboard-header">
           <h1>İş Yönetimi Paneli</h1>
-          {(user?.is_superuser || systemPermissions.work_create) && (
+          {canCreateWork && (
             <button className="add-work-btn" onClick={handleNewWork}>
               ➕ Yeni İş Ekle
             </button>
@@ -264,21 +159,21 @@ const Dashboard = () => {
             <h2>İş Listesi</h2>
             <div className="filter-buttons">
               <button 
-                className={`filter-btn ${filterStatus === 'active' ? 'active' : ''}`}
-                onClick={() => setFilterStatus('active')}
+                className={`filter-btn ${filters.workStatus === 'active' ? 'active' : ''}`}
+                onClick={() => setFilter('workStatus', 'active')}
               >
                 Devam Eden ({stats.inProgress})
               </button>
               <button 
-                className={`filter-btn ${filterStatus === 'completed' ? 'active' : ''}`}
-                onClick={() => setFilterStatus('completed')}
+                className={`filter-btn ${filters.workStatus === 'completed' ? 'active' : ''}`}
+                onClick={() => setFilter('workStatus', 'completed')}
               >
                 Tamamlanan ({stats.completed})
               </button>
             </div>
           </div>
           
-          {loading ? (
+          {worksLoading ? (
             <div className="loading">Yükleniyor...</div>
           ) : (
             <div className="works-table-container">
@@ -322,7 +217,7 @@ const Dashboard = () => {
               
               {filteredWorks.length === 0 && (
                 <div className="no-data">
-                  {filterStatus === 'active' 
+                  {filters.workStatus === 'active' 
                     ? 'Devam eden iş bulunmamaktadır.' 
                     : 'Tamamlanmış iş bulunmamaktadır.'}
                 </div>
@@ -333,7 +228,7 @@ const Dashboard = () => {
 
         {/* Work Modal */}
         <Modal
-          isOpen={isModalOpen}
+          isOpen={modals.workModal}
           onClose={handleCloseModal}
           title={isNewWork ? 'Yeni İş Ekle' : 'İş Detayları'}
         >
@@ -341,16 +236,16 @@ const Dashboard = () => {
             work={selectedWork}
             onSave={handleSaveWork}
             onCancel={handleCloseModal}
-            onDelete={systemPermissions.work_delete ? handleDeleteWork : null}
+            onDelete={canDeleteWork ? handleDeleteWork : null}
             isNew={isNewWork}
           />
         </Modal>
 
         {/* Delete Confirm Modal */}
         <ConfirmModal
-          isOpen={confirmModalOpen}
+          isOpen={modals.confirmModal}
           onClose={() => {
-            setConfirmModalOpen(false);
+            toggleModal('confirmModal', false);
             setWorkToDelete(null);
           }}
           onConfirm={confirmDelete}

@@ -1,16 +1,16 @@
 // src/components/Layout.js
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import authService from '../services/authService';
+import { useAuth } from '../hooks';
 import './Layout.css';
 
 const Layout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const user = authService.getCurrentUser();
+  const { user, logout } = useAuth();
 
   const handleLogout = () => {
-    authService.logout();
+    logout();
     navigate('/login');
   };
 

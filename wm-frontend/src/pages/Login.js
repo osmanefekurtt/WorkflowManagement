@@ -1,11 +1,13 @@
 // src/pages/Login.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import authService from '../services/authService';
+import { useAuth } from '../hooks';
 import './Login.css';
 
 const Login = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
+  
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -33,7 +35,7 @@ const Login = () => {
     setLoading(true);
     
     try {
-      const result = await authService.login(formData.username, formData.password);
+      const result = await login(formData.username, formData.password);
       
       if (result.success) {
         navigate('/');
