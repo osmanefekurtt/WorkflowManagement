@@ -30,6 +30,7 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
     }
   }, [isOpen]);
 
+
   // Role verisi gelirse formu doldur
   useEffect(() => {
     if (role) {

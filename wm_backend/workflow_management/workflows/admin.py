@@ -1,13 +1,47 @@
 # workflows/admin.py
 from django.contrib import admin
 from .models import Work, Movement, Category, SalesChannel, WorkType
+from django import forms
+from django.contrib import admin
+import json
+
+class PrettyJSONWidget(forms.Textarea):
+    """JSON verilerini düzgün göstermek için widget"""
+    
+    def format_value(self, value):
+        if value is None:
+            return None
+        try:
+            if isinstance(value, str):
+                value = json.loads(value)
+            return json.dumps(value, indent=2, ensure_ascii=False)
+        except:
+            return super().format_value(value)
+
+class WorkAdminForm(forms.ModelForm):
+    """Work admin formu"""
+    
+    class Meta:
+        model = Work
+        fields = '__all__'
+        widgets = {
+            'links': PrettyJSONWidget(attrs={'rows': 10, 'cols': 80})
+        }
 
 @admin.register(Work)
 class WorkAdmin(admin.ModelAdmin):
-    list_display = ['name', 'category', 'created', 'updated']  # 'status' kaldırıldı
-    list_filter = ['category', 'created']  # 'status' kaldırıldı
+    form = WorkAdminForm
+    list_display = ['name', 'category', 'get_links_count', 'created', 'updated']
+    list_filter = ['category', 'created']
     search_fields = ['name', 'note']
     date_hierarchy = 'created'
+    
+    def get_links_count(self, obj):
+        """Bağlantı sayısını göster"""
+        if obj.links:
+            return f"{len(obj.links)} bağlantı"
+        return "0 bağlantı"
+    get_links_count.short_description = 'Bağlantılar'
 
 @admin.register(Movement)
 class MovementAdmin(admin.ModelAdmin):

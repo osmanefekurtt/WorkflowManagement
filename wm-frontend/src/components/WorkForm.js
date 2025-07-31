@@ -21,10 +21,13 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
     packaging_date: '',
     stock_entry: false,
     shipping_date: '',
-    link: '',
-    link_title: '',
+    links: [],  // Yeni: Array olarak
     note: ''
   });
+
+  // Yeni link ekleme için state
+  const [newLink, setNewLink] = useState({ url: '', title: '', description: '' });
+  const [linkError, setLinkError] = useState('');
 
   // Context'ten dropdown verileri ve yetkiler
   const { categories, workTypes, salesChannels, loading: dropdownsLoading } = useDropdowns();
@@ -57,6 +60,7 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
         printing_confirm: work.printing_confirm || false,
         mixed: work.mixed || false,
         stock_entry: work.stock_entry || false,
+        links: work.links || [],
       };
       setFormData(workData);
       setOriginalData(workData);
@@ -74,6 +78,66 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const handleNewLinkChange = (e) => {
+    const { name, value } = e.target;
+    setNewLink(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    setLinkError('');
+  };
+
+  const validateUrl = (url) => {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleAddLink = () => {
+    if (!canWriteField('links')) {
+      return;
+    }
+
+    if (!newLink.url) {
+      setLinkError('URL alanı zorunludur');
+      return;
+    }
+
+    if (!validateUrl(newLink.url)) {
+      setLinkError('Geçerli bir URL giriniz (https://... şeklinde)');
+      return;
+    }
+
+    // Aynı URL daha önce eklenmişse uyar
+    if (formData.links.some(link => link.url === newLink.url)) {
+      setLinkError('Bu bağlantı zaten eklenmiş');
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      links: [...prev.links, { ...newLink }]
+    }));
+
+    // Formu temizle
+    setNewLink({ url: '', title: '', description: '' });
+    setLinkError('');
+  };
+
+  const handleRemoveLink = (index) => {
+    if (!canWriteField('links')) {
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      links: prev.links.filter((_, i) => i !== index)
     }));
   };
 
@@ -98,7 +162,7 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
     } else {
       dataToSend = {};
       Object.keys(formData).forEach(key => {
-        if (['id', 'created', 'updated'].includes(key)) {
+        if (['id', 'created', 'updated', 'link', 'link_title'].includes(key)) {
           return;
         }
         
@@ -106,7 +170,7 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
           return;
         }
         
-        if (originalData && formData[key] !== originalData[key]) {
+        if (originalData && JSON.stringify(formData[key]) !== JSON.stringify(originalData[key])) {
           if (formData[key] === '') {
             dataToSend[key] = null;
           } else {
@@ -405,41 +469,93 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
           )}
         </div>
 
-        {/* Ek Bilgiler */}
-        <div className="form-section full-width">
-          <h3>Ek Bilgiler</h3>
-          
-          <div className="form-row">
-            {isFieldVisible('link') && (
-              <div className="form-group">
-                <label>Bağlantı</label>
-                <input
-                  type="url"
-                  name="link"
-                  value={formData.link}
-                  onChange={handleChange}
-                  disabled={!isFieldEditable('link')}
-                />
+        {/* Bağlantılar - Yeni Tasarım */}
+        {isFieldVisible('links') && (
+          <div className="form-section full-width">
+            <h3>Bağlantılar</h3>
+            
+            {/* Mevcut Bağlantılar */}
+            {formData.links && formData.links.length > 0 && (
+              <div className="links-list">
+                {formData.links.map((link, index) => (
+                  <div key={index} className="link-item">
+                    <div className="link-info">
+                      <a href={link.url} target="_blank" rel="noopener noreferrer" className="link-url">
+                        {link.title || link.url}
+                      </a>
+                      {link.description && (
+                        <span className="link-description">{link.description}</span>
+                      )}
+                      {link.added_by && (
+                        <span className="link-meta">
+                          Ekleyen: {link.added_by} 
+                          {link.added_at && ` - ${new Date(link.added_at).toLocaleDateString('tr-TR')}`}
+                        </span>
+                      )}
+                    </div>
+                    {isFieldEditable('links') && (
+                      <button
+                        type="button"
+                        className="link-remove-btn"
+                        onClick={() => handleRemoveLink(index)}
+                        title="Bağlantıyı Kaldır"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
 
-            {isFieldVisible('link_title') && (
-              <div className="form-group">
-                <label>Bağlantı Başlığı</label>
-                <input
-                  type="text"
-                  name="link_title"
-                  value={formData.link_title}
-                  onChange={handleChange}
-                  disabled={!isFieldEditable('link_title')}
+            {/* Yeni Bağlantı Ekleme Formu */}
+            {isFieldEditable('links') && (
+              <div className="add-link-form">
+                <h4>Yeni Bağlantı Ekle</h4>
+                {linkError && <div className="link-error">{linkError}</div>}
+                <div className="link-form-row">
+                  <input
+                    type="url"
+                    name="url"
+                    placeholder="https://..."
+                    value={newLink.url}
+                    onChange={handleNewLinkChange}
+                    className="link-input"
+                  />
+                  <input
+                    type="text"
+                    name="title"
+                    placeholder="Başlık (opsiyonel)"
+                    value={newLink.title}
+                    onChange={handleNewLinkChange}
+                    className="link-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddLink}
+                    className="link-add-btn"
+                  >
+                    ➕ Ekle
+                  </button>
+                </div>
+                <textarea
+                  name="description"
+                  placeholder="Açıklama (opsiyonel)"
+                  value={newLink.description}
+                  onChange={handleNewLinkChange}
+                  className="link-textarea"
+                  rows="2"
                 />
               </div>
             )}
           </div>
+        )}
 
-          {isFieldVisible('note') && (
+        {/* Notlar */}
+        {isFieldVisible('note') && (
+          <div className="form-section full-width">
+            <h3>Notlar</h3>
             <div className="form-group">
-              <label>Notlar</label>
               <textarea
                 name="note"
                 value={formData.note}
@@ -448,8 +564,8 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
                 rows="4"
               />
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="form-actions">

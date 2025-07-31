@@ -50,6 +50,8 @@ class SalesChannel(models.Model):
         verbose_name_plural = 'Satış Kanalları'
         ordering = ['order', 'name']
 
+# workflows/models.py içinde Work modelini güncelleyin:
+
 class Work(models.Model):
     name = models.CharField(max_length=200, verbose_name='İsim')
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Kategori')
@@ -67,8 +69,19 @@ class Work(models.Model):
     packaging_date = models.DateField(verbose_name='Paketleme Tarihi', blank=True, null=True)
     stock_entry = models.BooleanField(verbose_name='Stok Girişi', default=False)
     shipping_date = models.DateField(verbose_name='Sevkiyat Tarihi', blank=True, null=True)
-    link = models.URLField(verbose_name='Bağlantı', blank=True, null=True)
-    link_title = models.CharField(max_length=150, verbose_name='Bağlantı Başlığı', blank=True, null=True)
+    
+    # Eski link alanlarını kaldır ve yeni JSONField ekle
+    links = models.JSONField(
+        verbose_name='Bağlantılar',
+        default=list,
+        blank=True,
+        help_text='[{"url": "https://...", "title": "Başlık", "description": "Açıklama"}]'
+    )
+    
+    # Geriye dönük uyumluluk için eski alanları geçici olarak tut
+    link = models.URLField(verbose_name='Bağlantı (Eski)', blank=True, null=True)
+    link_title = models.CharField(max_length=150, verbose_name='Bağlantı Başlığı (Eski)', blank=True, null=True)
+    
     note = models.TextField(verbose_name='Not', blank=True, null=True)
     created = models.DateTimeField(auto_now_add=True, verbose_name='Oluşturulma Tarihi', blank=True, null=True)
     updated = models.DateTimeField(auto_now=True, verbose_name='Güncellenme Tarihi', blank=True, null=True)
@@ -76,11 +89,29 @@ class Work(models.Model):
     def __str__(self):
         return f"{self.name} - {self.category}"
     
+    def clean(self):
+        """Link formatlarını validate et"""
+        from django.core.validators import URLValidator
+        from django.core.exceptions import ValidationError
+        
+        if self.links:
+            validator = URLValidator()
+            for i, link_data in enumerate(self.links):
+                if not isinstance(link_data, dict):
+                    raise ValidationError(f'Bağlantı {i+1}: Geçersiz format')
+                
+                url = link_data.get('url')
+                if not url:
+                    raise ValidationError(f'Bağlantı {i+1}: URL zorunludur')
+                
+                try:
+                    validator(url)
+                except ValidationError:
+                    raise ValidationError(f'Bağlantı {i+1}: Geçersiz URL formatı')
+    
     @property
     def calculated_status(self):
-        """
-        İşin durumunu otomatik hesapla
-        """
+        """İşin durumunu otomatik hesapla"""
         if self.stock_entry:
             return {
                 'code': 'completed',

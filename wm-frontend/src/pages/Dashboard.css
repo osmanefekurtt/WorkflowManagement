@@ -214,3 +214,13 @@
   color: #6c757d;
   font-size: 16px;
 }
+
+.link-count {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #e3f2fd;
+  color: #1976d2;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}

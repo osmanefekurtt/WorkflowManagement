@@ -49,8 +49,7 @@ class ColumnPermission(models.Model):
         ('packaging_date', 'Paketleme Tarihi'),
         ('stock_entry', 'Stok Girişi'),
         ('shipping_date', 'Sevkiyat Tarihi'),
-        ('link', 'Bağlantı'),
-        ('link_title', 'Bağlantı Başlığı'),
+        ('links', 'Bağlantılar'),  # Yeni - eski link ve link_title yerine
         ('note', 'Not'),
     ]
     

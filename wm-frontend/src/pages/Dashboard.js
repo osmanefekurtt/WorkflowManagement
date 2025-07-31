@@ -267,6 +267,7 @@ const Dashboard = () => {
                     <th>Fiyat</th>
                     <th>Tip</th>
                     <th>Satış Kanalı</th>
+                    <th>Bağlantılar</th>
                     <th>Durum</th>
                   </tr>
                 </thead>
@@ -283,6 +284,15 @@ const Dashboard = () => {
                       <td>{work.price ? `${work.price} TL` : '-'}</td>
                       <td>{work.type_name || '-'}</td>
                       <td>{work.sales_channel_name || '-'}</td>
+                      <td>
+                        <span className="link-count">
+                          {work.links && work.links.length > 0 ? (
+                            <>🔗 {work.links.length}</>
+                          ) : (
+                            '-'
+                          )}
+                        </span>
+                      </td>
                       <td>
                         <span 
                           className="status-badge" 
