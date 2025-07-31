@@ -4,24 +4,32 @@ import Layout from '../components/Layout';
 import UserModal from '../components/UserModal';
 import RoleModal from '../components/RoleModal';
 import ToastContainer from '../components/ToastContainer';
-import useToast from '../hooks/useToast';
+import DropdownManager from '../components/DropdownManager';
+import { useUsersAndRoles, useUI } from '../hooks';
 import api from '../services/api';
 import './Settings.css';
-import DropdownManager from '../components/DropdownManager'; // Bu satırı ekleyin
-
 
 const Settings = () => {
-  const [activeTab, setActiveTab] = useState('users'); // users, roles
-  const [userModalOpen, setUserModalOpen] = useState(false);
-  const [roleModalOpen, setRoleModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('users');
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedRole, setSelectedRole] = useState(null);
-  const [users, setUsers] = useState([]);
-  const [roles, setRoles] = useState([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [loadingRoles, setLoadingRoles] = useState(false);
   
-  const { toasts, showToast, removeToast } = useToast();
+  const {
+    users,
+    roles,
+    usersLoading,
+    rolesLoading,
+    fetchUsers,
+    fetchRoles
+  } = useUsersAndRoles();
+  
+  const {
+    toasts,
+    showToast,
+    removeToast,
+    modals,
+    toggleModal
+  } = useUI();
 
   useEffect(() => {
     if (activeTab === 'users') {
@@ -31,61 +39,24 @@ const Settings = () => {
     }
   }, [activeTab]);
 
-  const fetchUsers = async () => {
-    setLoadingUsers(true);
-    try {
-      const response = await api.get('/auth/users/');
-      
-      // Response yapısına göre data'yı al
-      if (response.data.success && response.data.data && Array.isArray(response.data.data.data)) {
-        setUsers(response.data.data.data);
-      } else if (response.data.success && Array.isArray(response.data.data)) {
-        setUsers(response.data.data);
-      } else {
-        setUsers([]);
-      }
-    } catch (error) {
-      console.error('Kullanıcılar yüklenirken hata:', error);
-      showToast('Kullanıcılar yüklenirken hata oluştu', 'error');
-      setUsers([]);
-    } finally {
-      setLoadingUsers(false);
-    }
-  };
-
-  const fetchRoles = async () => {
-    setLoadingRoles(true);
-    try {
-      const response = await api.get('/permissions/roles/');
-      if (response.data.success) {
-        setRoles(response.data.data);
-      }
-    } catch (error) {
-      console.error('Roller yüklenirken hata:', error);
-      showToast('Roller yüklenirken hata oluştu', 'error');
-    } finally {
-      setLoadingRoles(false);
-    }
-  };
-
   const handleNewUser = () => {
     setSelectedUser(null);
-    setUserModalOpen(true);
+    toggleModal('userModal', true);
   };
 
   const handleEditUser = (user) => {
     setSelectedUser(user);
-    setUserModalOpen(true);
+    toggleModal('userModal', true);
   };
 
   const handleNewRole = () => {
     setSelectedRole(null);
-    setRoleModalOpen(true);
+    toggleModal('roleModal', true);
   };
 
   const handleEditRole = (role) => {
     setSelectedRole(role);
-    setRoleModalOpen(true);
+    toggleModal('roleModal', true);
   };
 
   const handleSaveUser = async (userData, roles) => {
@@ -154,7 +125,7 @@ const Settings = () => {
       }
       
       fetchUsers();
-      setUserModalOpen(false);
+      toggleModal('userModal', false);
       
     } catch (error) {
       console.error('Kullanıcı kaydetme hatası:', error);
@@ -189,7 +160,7 @@ const Settings = () => {
           'success'
         );
         fetchRoles();
-        setRoleModalOpen(false);
+        toggleModal('roleModal', false);
       }
     } catch (error) {
       console.error('Rol kaydetme hatası:', error);
@@ -235,7 +206,6 @@ const Settings = () => {
           >
             📝 Dropdown Yönetimi
           </button>
-
         </div>
 
         {/* Tab Content */}
@@ -250,7 +220,7 @@ const Settings = () => {
               </div>
               
               <div className="content-area">
-                {loadingUsers ? (
+                {usersLoading ? (
                   <div className="loading">Yükleniyor...</div>
                 ) : users.length === 0 ? (
                   <div className="no-data">Henüz kullanıcı bulunmamaktadır.</div>
@@ -306,7 +276,7 @@ const Settings = () => {
               </div>
               
               <div className="content-area">
-                {loadingRoles ? (
+                {rolesLoading ? (
                   <div className="loading">Yükleniyor...</div>
                 ) : roles.length === 0 ? (
                   <div className="no-data">Henüz rol tanımlanmamış.</div>
@@ -363,7 +333,7 @@ const Settings = () => {
                   <DropdownManager 
                     title="Kategori"
                     endpoint="/categories/"
-                    onUpdate={() => {/* refresh if needed */}}
+                    onUpdate={() => {/* Context otomatik günceller */}}
                   />
                 </div>
                 
@@ -373,7 +343,7 @@ const Settings = () => {
                   <DropdownManager 
                     title="İş Tipi"
                     endpoint="/work-types/"
-                    onUpdate={() => {/* refresh if needed */}}
+                    onUpdate={() => {/* Context otomatik günceller */}}
                   />
                 </div>
                 
@@ -383,7 +353,7 @@ const Settings = () => {
                   <DropdownManager 
                     title="Satış Kanalı"
                     endpoint="/sales-channels/"
-                    onUpdate={() => {/* refresh if needed */}}
+                    onUpdate={() => {/* Context otomatik günceller */}}
                   />
                 </div>
               </div>
@@ -393,16 +363,16 @@ const Settings = () => {
 
         {/* User Modal */}
         <UserModal
-          isOpen={userModalOpen}
-          onClose={() => setUserModalOpen(false)}
+          isOpen={modals.userModal}
+          onClose={() => toggleModal('userModal', false)}
           onSave={handleSaveUser}
           user={selectedUser}
         />
         
         {/* Role Modal */}
         <RoleModal
-          isOpen={roleModalOpen}
-          onClose={() => setRoleModalOpen(false)}
+          isOpen={modals.roleModal}
+          onClose={() => toggleModal('roleModal', false)}
           onSave={handleSaveRole}
           role={selectedRole}
         />

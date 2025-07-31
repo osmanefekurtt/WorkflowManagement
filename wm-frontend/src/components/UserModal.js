@@ -1,6 +1,7 @@
 // src/components/UserModal.js
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
+import { useUsersAndRoles } from '../hooks';
 import api from '../services/api';
 import './UserModal.css';
 
@@ -15,16 +16,9 @@ const UserModal = ({ isOpen, onClose, onSave, user = null }) => {
     roles: []
   });
   
-  const [roles, setRoles] = useState([]);
+  const { roles } = useUsersAndRoles();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
-
-  // Rolleri yükle
-  useEffect(() => {
-    if (isOpen) {
-      fetchRoles();
-    }
-  }, [isOpen]);
 
   // User verisi gelirse formu doldur
   useEffect(() => {
@@ -70,17 +64,6 @@ const UserModal = ({ isOpen, onClose, onSave, user = null }) => {
           ...prev,
           roles: userRoles
         }));
-      }
-    } catch (error) {
-      console.error('Roller yüklenirken hata:', error);
-    }
-  };
-
-  const fetchRoles = async () => {
-    try {
-      const response = await api.get('/permissions/roles/');
-      if (response.data.success) {
-        setRoles(response.data.data);
       }
     } catch (error) {
       console.error('Roller yüklenirken hata:', error);

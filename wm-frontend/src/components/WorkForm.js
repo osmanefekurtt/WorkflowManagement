@@ -1,7 +1,6 @@
-// src/components/WorkForm.js - Dropdown'lı versiyon
+// src/components/WorkForm.js
 import React, { useState, useEffect } from 'react';
-import permissionService from '../services/permissionService';
-import api from '../services/api';
+import { usePermissions, useDropdowns } from '../hooks';
 import './WorkForm.css';
 
 const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
@@ -27,57 +26,13 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
     note: ''
   });
 
-  // Dropdown verileri
-  const [categories, setCategories] = useState([]);
-  const [workTypes, setWorkTypes] = useState([]);
-  const [salesChannels, setSalesChannels] = useState([]);
-  const [loadingDropdowns, setLoadingDropdowns] = useState(true);
-
+  // Context'ten dropdown verileri ve yetkiler
+  const { categories, workTypes, salesChannels, loading: dropdownsLoading } = useDropdowns();
+  const { workPermissions, canReadField, canWriteField, hasFieldPermission } = usePermissions();
+  
   // Orijinal veriyi sakla
   const [originalData, setOriginalData] = useState(null);
-  
-  // Yetkileri sakla
-  const [permissions, setPermissions] = useState({});
-  const [loadingPermissions, setLoadingPermissions] = useState(true);
-
-  useEffect(() => {
-    // Yetkileri al
-    const fetchPermissions = async () => {
-      setLoadingPermissions(true);
-      const perms = await permissionService.getMyWorkPermissions();
-      setPermissions(perms);
-      setLoadingPermissions(false);
-    };
-    
-    // Dropdown verilerini al
-    const fetchDropdownData = async () => {
-      setLoadingDropdowns(true);
-      try {
-        const [catResponse, typeResponse, channelResponse] = await Promise.all([
-          api.get('/categories/'),
-          api.get('/work-types/'),
-          api.get('/sales-channels/')
-        ]);
-        
-        if (catResponse.data.success) {
-          setCategories(catResponse.data.data || []);
-        }
-        if (typeResponse.data.success) {
-          setWorkTypes(typeResponse.data.data || []);
-        }
-        if (channelResponse.data.success) {
-          setSalesChannels(channelResponse.data.data || []);
-        }
-      } catch (error) {
-        console.error('Dropdown verileri yüklenirken hata:', error);
-      } finally {
-        setLoadingDropdowns(false);
-      }
-    };
-    
-    fetchPermissions();
-    fetchDropdownData();
-  }, []);
+  const [loadingPermissions, setLoadingPermissions] = useState(false);
 
   useEffect(() => {
     if (work) {
@@ -100,7 +55,7 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
     const { name, value, type, checked } = e.target;
     
     // Yazma yetkisi kontrolü
-    if (!permissionService.canWrite(permissions, name)) {
+    if (!canWriteField(name)) {
       return;
     }
     
@@ -118,7 +73,7 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
     if (isNew) {
       dataToSend = {};
       Object.keys(formData).forEach(key => {
-        if (!permissionService.canWrite(permissions, key)) {
+        if (!canWriteField(key)) {
           return;
         }
         
@@ -135,7 +90,7 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
           return;
         }
         
-        if (!permissionService.canWrite(permissions, key)) {
+        if (!canWriteField(key)) {
           return;
         }
         
@@ -163,14 +118,14 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
   };
 
   const isFieldVisible = (fieldName) => {
-    return permissionService.hasPermission(permissions, fieldName);
+    return hasFieldPermission(fieldName);
   };
 
   const isFieldEditable = (fieldName) => {
-    return permissionService.canWrite(permissions, fieldName);
+    return canWriteField(fieldName);
   };
 
-  if (loadingPermissions || loadingDropdowns) {
+  if (loadingPermissions || dropdownsLoading) {
     return <div className="loading">Yükleniyor...</div>;
   }
 
@@ -271,7 +226,6 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
           </div>
         </div>
 
-        {/* Diğer bölümler aynı kalacak... */}
         {/* Tasarım Bilgileri */}
         <div className="form-section">
           <h3>Tasarım Bilgileri</h3>

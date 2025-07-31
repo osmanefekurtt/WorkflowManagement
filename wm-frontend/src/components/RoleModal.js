@@ -1,6 +1,7 @@
 // src/components/RoleModal.js
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
+import { useUI } from '../hooks';
 import api from '../services/api';
 import './RoleModal.css';
 
@@ -18,6 +19,9 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
   const [availableColumns, setAvailableColumns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  
+  // Context hook
+  const { showToast } = useUI();
 
   // Mevcut kolonları yükle
   useEffect(() => {
@@ -68,6 +72,7 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
       }
     } catch (error) {
       console.error('Kolonlar yüklenirken hata:', error);
+      showToast('Kolon bilgileri yüklenirken hata oluştu', 'error');
     }
   };
 
@@ -108,6 +113,7 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
       }
     } catch (error) {
       console.error('Rol izinleri yüklenirken hata:', error);
+      showToast('Rol izinleri yüklenirken hata oluştu', 'error');
     }
   };
 

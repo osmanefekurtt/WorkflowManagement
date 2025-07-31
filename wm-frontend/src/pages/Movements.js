@@ -1,24 +1,28 @@
 // src/pages/Movements.js
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import Layout from '../components/Layout';
 import ToastContainer from '../components/ToastContainer';
-import useToast from '../hooks/useToast';
-import api from '../services/api';
-import authService from '../services/authService';
+import { useMovements, useUI, useAuth } from '../hooks';
 import './Movements.css';
 
 const Movements = () => {
-  const [movements, setMovements] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const { toasts, showToast, removeToast } = useToast();
-  
-  const currentUser = authService.getCurrentUser();
+  const { user } = useAuth();
+  const { 
+    filteredMovements, 
+    loading, 
+    fetchMovements 
+  } = useMovements();
+  const { 
+    toasts, 
+    showToast, 
+    removeToast,
+    filters,
+    setFilter 
+  } = useUI();
 
   useEffect(() => {
     // Staff değilse dashboard'a yönlendir
-    if (!currentUser?.is_staff) {
+    if (!user?.is_staff) {
       showToast('Bu sayfayı görüntüleme yetkiniz yok.', 'error');
       setTimeout(() => {
         window.location.href = '/';
@@ -31,31 +35,10 @@ const Movements = () => {
     // Her 10 saniyede bir veriyi yenile
     const interval = setInterval(() => {
       fetchMovements();
-    }, 10000); // 10000 ms = 10 saniye
+    }, 10000);
     
-    // Component unmount olduğunda interval'i temizle
     return () => clearInterval(interval);
-  }, []);
-
-  const fetchMovements = async () => {
-    try {
-      const response = await api.get('/movements/');
-      if (response.data.success) {
-        setMovements(response.data.data);
-      }
-    } catch (error) {
-      console.error('Hareketler yüklenirken hata:', error);
-      
-      // Admin değilse yetki hatası
-      if (error.response?.status === 403) {
-        showToast('Bu sayfayı görüntüleme yetkiniz yok.', 'error');
-      } else {
-        showToast('Hareketler yüklenirken bir hata oluştu.', 'error');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [user]);
 
   const getActionIcon = (action) => {
     switch (action) {
@@ -95,22 +78,18 @@ const Movements = () => {
   };
 
   const formatValue = (value) => {
-    // Object kontrolü - eğer {id, display} formatında ise
     if (value && typeof value === 'object' && value.display) {
       return value.display;
     }
     
-    // Null veya undefined kontrolü
     if (value === null || value === undefined) {
       return 'Boş';
     }
     
-    // Boolean kontrolü
     if (typeof value === 'boolean') {
       return value ? 'Evet' : 'Hayır';
     }
     
-    // Date string kontrolü
     if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}(T|$)/)) {
       const date = new Date(value);
       if (!isNaN(date)) {
@@ -118,7 +97,6 @@ const Movements = () => {
       }
     }
     
-    // Diğer durumlar için string'e çevir
     return String(value);
   };
 
@@ -127,7 +105,6 @@ const Movements = () => {
 
     const changedFields = [];
     
-    // Alan isimlerini Türkçeleştir
     const fieldNames = {
       name: 'İsim',
       category: 'Kategori',
@@ -154,7 +131,6 @@ const Movements = () => {
       const oldValue = formatValue(changes.old[key]);
       const newValue = formatValue(changes.new[key]);
       
-      // Sadece gerçekten değişen alanları göster
       if (oldValue !== newValue) {
         changedFields.push({
           field: fieldNames[key] || key,
@@ -166,26 +142,6 @@ const Movements = () => {
 
     return changedFields.length > 0 ? changedFields : null;
   };
-
-  // Filtreleme
-  const filteredMovements = movements.filter(movement => {
-    // Action filter
-    if (filter !== 'all' && movement.action !== filter) {
-      return false;
-    }
-
-    // Search filter
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase();
-      return (
-        movement.description.toLowerCase().includes(search) ||
-        movement.user?.username?.toLowerCase().includes(search) ||
-        movement.work?.name?.toLowerCase().includes(search)
-      );
-    }
-
-    return true;
-  });
 
   return (
     <Layout>
@@ -207,8 +163,8 @@ const Movements = () => {
           <div className="filter-group">
             <label>İşlem Tipi:</label>
             <select 
-              value={filter} 
-              onChange={(e) => setFilter(e.target.value)}
+              value={filters.movementAction} 
+              onChange={(e) => setFilter('movementAction', e.target.value)}
               className="filter-select"
             >
               <option value="all">Tümü</option>
@@ -223,8 +179,8 @@ const Movements = () => {
             <input
               type="text"
               placeholder="Kullanıcı, iş adı veya açıklama..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              value={filters.searchTerm}
+              onChange={(e) => setFilter('searchTerm', e.target.value)}
               className="filter-search"
             />
           </div>
@@ -236,7 +192,7 @@ const Movements = () => {
             <div className="loading">Yükleniyor...</div>
           ) : filteredMovements.length === 0 ? (
             <div className="no-data">
-              {searchTerm || filter !== 'all' 
+              {filters.searchTerm || filters.movementAction !== 'all' 
                 ? 'Filtrelere uygun hareket bulunamadı.' 
                 : 'Henüz kayıtlı hareket bulunmamaktadır.'}
             </div>

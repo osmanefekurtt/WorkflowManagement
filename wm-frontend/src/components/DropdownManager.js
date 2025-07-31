@@ -1,5 +1,6 @@
 // src/components/DropdownManager.js
 import React, { useState, useEffect } from 'react';
+import { useDropdowns, useUI } from '../hooks';
 import api from '../services/api';
 import './DropdownManager.css';
 
@@ -10,6 +11,10 @@ const DropdownManager = ({ title, endpoint, onUpdate }) => {
   const [editingItem, setEditingItem] = useState(null);
   const [formData, setFormData] = useState({ name: '' });
   const [error, setError] = useState('');
+  
+  // Context hooks
+  const { fetchDropdowns } = useDropdowns();
+  const { showToast } = useUI();
 
   useEffect(() => {
     fetchItems();
@@ -52,6 +57,16 @@ const DropdownManager = ({ title, endpoint, onUpdate }) => {
       if (response.data.success || response.status === 200 || response.status === 201) {
         fetchItems();
         resetForm();
+        
+        // Context'i güncelle
+        fetchDropdowns();
+        
+        // Toast göster
+        showToast(
+          editingItem ? `${title} güncellendi` : `${title} eklendi`,
+          'success'
+        );
+        
         if (onUpdate) onUpdate();
       }
     } catch (error) {
@@ -76,11 +91,19 @@ const DropdownManager = ({ title, endpoint, onUpdate }) => {
       const response = await api.delete(`${endpoint}${id}/`);
       if (response.data.success || response.status === 204) {
         fetchItems();
+        
+        // Context'i güncelle
+        fetchDropdowns();
+        
+        // Toast göster
+        showToast(`${title} silindi`, 'success');
+        
         if (onUpdate) onUpdate();
       }
     } catch (error) {
       console.error('Silme hatası:', error);
       setError(error.response?.data?.message || 'Silme sırasında hata oluştu');
+      showToast('Silme işlemi başarısız', 'error');
     }
   };
 
