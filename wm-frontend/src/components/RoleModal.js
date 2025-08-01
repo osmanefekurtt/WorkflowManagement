@@ -23,7 +23,6 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
   // Context hook
   const { showToast } = useUI();
 
-  // Kolonları kategorize et
   const categorizeColumns = (columns) => {
     const categories = {
       basic: {
@@ -39,7 +38,14 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
       printing: {
         title: 'Baskı Bilgileri',
         icon: '🖨️',
-        columns: ['printing_location', 'printing_confirm', 'printing_start_date', 'printing_end_date']
+        columns: [
+          'printing_location', 
+          'printing_confirm', 
+          'printing_control',     // YENİ
+          'printing_controller',  // YENİ
+          'printing_start_date', 
+          'printing_end_date'
+        ]
       },
       shipping: {
         title: 'Paketleme ve Sevkiyat',

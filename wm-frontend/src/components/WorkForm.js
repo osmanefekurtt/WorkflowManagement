@@ -22,7 +22,7 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
     printing_controller: '',  // Yeni
     printing_start_date: '',
     printing_end_date: '',
-    mixed: false,
+    mixed: '',
     packaging_date: '',
     stock_entry: false,
     shipping_date: '',
@@ -138,9 +138,10 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
       }
     }
     
+    // Mixed alanı artık text olduğu için checkbox kontrolünü kaldır
     setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
     }));
   };
 
@@ -559,16 +560,16 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
           <h3>Paketleme ve Sevkiyat</h3>
           
           {isFieldVisible('mixed') && (
-            <div className="form-checkbox">
-              <input
-                type="checkbox"
-                id="mixed"
-                name="mixed"
-                checked={formData.mixed}
-                onChange={handleChange}
-                disabled={!isFieldEditable('mixed')}
-              />
-              <label htmlFor="mixed">Karışık</label>
+            <div className="form-group">
+                <label>Karışık</label>
+                <input
+                    type="text"
+                    name="mixed"
+                    value={formData.mixed}
+                    onChange={handleChange}
+                    disabled={!isFieldEditable('mixed')}
+                    placeholder="Karışık bilgisi giriniz..."
+                />
             </div>
           )}
 

@@ -91,7 +91,7 @@ class Work(models.Model):
     )
     printing_start_date = models.DateField(verbose_name='Baskı Başlangıç Tarihi', blank=True, null=True)
     printing_end_date = models.DateField(verbose_name='Baskı Bitiş Tarihi', blank=True, null=True)
-    mixed = models.BooleanField(verbose_name='Karışık', default=False)
+    mixed = models.CharField(max_length=200, verbose_name='Karışık', blank=True, null=True)
     packaging_date = models.DateField(verbose_name='Paketleme Tarihi', blank=True, null=True)
     stock_entry = models.BooleanField(verbose_name='Stok Girişi', default=False)
     shipping_date = models.DateField(verbose_name='Sevkiyat Tarihi', blank=True, null=True)
