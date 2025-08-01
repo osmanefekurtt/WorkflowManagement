@@ -1,6 +1,8 @@
 // src/components/WorkForm.js
 import React, { useState, useEffect } from 'react';
 import { usePermissions, useDropdowns, useApp, useOnce } from '../hooks';
+import SearchableDropdown from './SearchableDropdown';
+import api from '../services/api';
 import './WorkForm.css';
 
 const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
@@ -10,20 +12,31 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
     price: '',
     type: '',
     sales_channel: '',
+    designer: '',
     design_start_date: '',
     design_end_date: '',
     confirm_date: '',
     printing_location: '',
     printing_confirm: false,
+    printing_control: false,  // Yeni
+    printing_controller: '',  // Yeni
     printing_start_date: '',
     printing_end_date: '',
     mixed: false,
     packaging_date: '',
     stock_entry: false,
     shipping_date: '',
-    links: [],  // Yeni: Array olarak
+    links: [],
     note: ''
   });
+
+  // Designer dropdown için state
+  const [designers, setDesigners] = useState([]);
+  const [designersLoading, setDesignersLoading] = useState(false);
+  
+  // Printing controller dropdown için state
+  const [controllers, setControllers] = useState([]);
+  const [controllersLoading, setControllersLoading] = useState(false);
 
   // Yeni link ekleme için state
   const [newLink, setNewLink] = useState({ url: '', title: '', description: '' });
@@ -57,7 +70,10 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
         category: work.category || '',
         type: work.type || '',
         sales_channel: work.sales_channel || '',
+        designer: work.designer || '',
         printing_confirm: work.printing_confirm || false,
+        printing_control: work.printing_control || false,  // Yeni
+        printing_controller: work.printing_controller || '',  // Yeni
         mixed: work.mixed || false,
         stock_entry: work.stock_entry || false,
         links: work.links || [],
@@ -67,6 +83,40 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
     }
   }, [work]);
 
+  // Tasarımcı arama fonksiyonu
+  const searchDesigners = async (searchTerm) => {
+    setDesignersLoading(true);
+    try {
+      const response = await api.get('/auth/users/search/', {
+        params: { q: searchTerm, limit: 50 }
+      });
+      if (response.data.success) {
+        setDesigners(response.data.data.users || []);
+      }
+    } catch (error) {
+      console.error('Tasarımcı arama hatası:', error);
+    } finally {
+      setDesignersLoading(false);
+    }
+  };
+
+  // Kontrolü yapan kişi arama fonksiyonu
+  const searchControllers = async (searchTerm) => {
+    setControllersLoading(true);
+    try {
+      const response = await api.get('/auth/users/search/', {
+        params: { q: searchTerm, limit: 50 }
+      });
+      if (response.data.success) {
+        setControllers(response.data.data.users || []);
+      }
+    } catch (error) {
+      console.error('Kontrolör arama hatası:', error);
+    } finally {
+      setControllersLoading(false);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     
@@ -75,9 +125,44 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
       return;
     }
     
+    // Baskı kontrolü özel işlemi
+    if (name === 'printing_control') {
+      if (!checked) {
+        // Baskı kontrolü kapatılırsa kontrolörü temizle
+        setFormData(prev => ({
+          ...prev,
+          printing_control: false,
+          printing_controller: ''
+        }));
+        return;
+      }
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const handleDesignerChange = (designerId) => {
+    if (!canWriteField('designer')) {
+      return;
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      designer: designerId
+    }));
+  };
+
+  const handleControllerChange = (controllerId) => {
+    if (!canWriteField('printing_controller') || !formData.printing_control) {
+      return;
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      printing_controller: controllerId
     }));
   };
 
@@ -162,7 +247,7 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
     } else {
       dataToSend = {};
       Object.keys(formData).forEach(key => {
-        if (['id', 'created', 'updated', 'link', 'link_title'].includes(key)) {
+        if (['id', 'created', 'updated', 'link', 'link_title', 'printing_control_date'].includes(key)) {
           return;
         }
         
@@ -306,6 +391,26 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
         <div className="form-section">
           <h3>Tasarım Bilgileri</h3>
           
+          {isFieldVisible('designer') && (
+            <div className="form-group">
+              <label>Tasarımcı</label>
+              <SearchableDropdown
+                value={formData.designer}
+                onChange={handleDesignerChange}
+                onSearch={searchDesigners}
+                options={designers}
+                placeholder="Tasarımcı seçiniz..."
+                searchPlaceholder="İsim veya kullanıcı adı ile ara..."
+                disabled={!isFieldEditable('designer')}
+                loading={designersLoading}
+                displayKey="display_name"
+                valueKey="id"
+                noResultsText="Kullanıcı bulunamadı"
+                loadOnOpen={true}
+              />
+            </div>
+          )}
+          
           <div className="form-row">
             {isFieldVisible('design_start_date') && (
               <div className="form-group">
@@ -376,6 +481,47 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
                 disabled={!isFieldEditable('printing_confirm')}
               />
               <label htmlFor="printing_confirm">Baskı Onayı</label>
+            </div>
+          )}
+
+          {/* Baskı Kontrolü - YENİ */}
+          {isFieldVisible('printing_control') && (
+            <div className="printing-control-container">
+              <div className="form-checkbox">
+                <input
+                  type="checkbox"
+                  id="printing_control"
+                  name="printing_control"
+                  checked={formData.printing_control}
+                  onChange={handleChange}
+                  disabled={!isFieldEditable('printing_control')}
+                />
+                <label htmlFor="printing_control">Baskı Kontrolü</label>
+              </div>
+              
+              {formData.printing_control && isFieldVisible('printing_controller') && (
+                <div className="controller-dropdown">
+                  <SearchableDropdown
+                    value={formData.printing_controller}
+                    onChange={handleControllerChange}
+                    onSearch={searchControllers}
+                    options={controllers}
+                    placeholder="Kontrolü yapan kişiyi seçiniz..."
+                    searchPlaceholder="İsim veya kullanıcı adı ile ara..."
+                    disabled={!isFieldEditable('printing_controller')}
+                    loading={controllersLoading}
+                    displayKey="display_name"
+                    valueKey="id"
+                    noResultsText="Kullanıcı bulunamadı"
+                    loadOnOpen={true}
+                  />
+                  {work?.printing_control_date && (
+                    <small className="control-date">
+                      Kontrol tarihi: {new Date(work.printing_control_date).toLocaleString('tr-TR')}
+                    </small>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -469,7 +615,7 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
           )}
         </div>
 
-        {/* Bağlantılar - Yeni Tasarım */}
+        {/* Bağlantılar */}
         {isFieldVisible('links') && (
           <div className="form-section full-width">
             <h3>Bağlantılar</h3>

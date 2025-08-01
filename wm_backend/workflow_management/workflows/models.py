@@ -58,11 +58,37 @@ class Work(models.Model):
     price = models.FloatField(verbose_name='Fiyat', blank=True, null=True)
     type = models.ForeignKey(WorkType, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Tip')
     sales_channel = models.ForeignKey(SalesChannel, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Satış Kanalı')
+    
+    # Tasarım bilgileri
+    designer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='designed_works',
+        verbose_name='Tasarımcı'
+    )
     design_start_date = models.DateField(verbose_name='Tasarım Başlangıç Tarihi', blank=True, null=True)
     design_end_date = models.DateField(verbose_name='Tasarım Bitiş Tarihi', blank=True, null=True)
     confirm_date = models.DateField(verbose_name='Onay Tarihi', blank=True, null=True)
+    
     printing_location = models.CharField(max_length=100, verbose_name='Baskı Lokasyonu', blank=True, null=True)
     printing_confirm = models.BooleanField(verbose_name='Baskı Onayı', default=False)
+    
+    printing_control = models.BooleanField(verbose_name='Baskı Kontrolü', default=False)
+    printing_controller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='controlled_prints',
+        verbose_name='Kontrolü Yapan Kişi'
+    )
+    printing_control_date = models.DateTimeField(
+        verbose_name='Kontrol Tarihi',
+        blank=True,
+        null=True
+    )
     printing_start_date = models.DateField(verbose_name='Baskı Başlangıç Tarihi', blank=True, null=True)
     printing_end_date = models.DateField(verbose_name='Baskı Bitiş Tarihi', blank=True, null=True)
     mixed = models.BooleanField(verbose_name='Karışık', default=False)
@@ -70,17 +96,12 @@ class Work(models.Model):
     stock_entry = models.BooleanField(verbose_name='Stok Girişi', default=False)
     shipping_date = models.DateField(verbose_name='Sevkiyat Tarihi', blank=True, null=True)
     
-    # Eski link alanlarını kaldır ve yeni JSONField ekle
     links = models.JSONField(
         verbose_name='Bağlantılar',
         default=list,
         blank=True,
         help_text='[{"url": "https://...", "title": "Başlık", "description": "Açıklama"}]'
     )
-    
-    # Geriye dönük uyumluluk için eski alanları geçici olarak tut
-    link = models.URLField(verbose_name='Bağlantı (Eski)', blank=True, null=True)
-    link_title = models.CharField(max_length=150, verbose_name='Bağlantı Başlığı (Eski)', blank=True, null=True)
     
     note = models.TextField(verbose_name='Not', blank=True, null=True)
     created = models.DateTimeField(auto_now_add=True, verbose_name='Oluşturulma Tarihi', blank=True, null=True)

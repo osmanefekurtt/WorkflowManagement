@@ -1,13 +1,58 @@
 # authentication/views.py
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.conf import settings
 from datetime import datetime, timezone
+from django.contrib.auth.models import User
+from django.db.models import Q
 from .serializers import LoginSerializer, UserSerializer, LoginResponseSerializer, RegisterSerializer
 from .permissions import IsSuperUser
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_users(request):
+    """
+    Kullanıcı arama endpoint'i - tasarımcı seçimi için
+    Query params:
+    - q: arama terimi (isim, soyisim veya username)
+    - limit: maksimum sonuç sayısı (default: 20)
+    """
+    search_term = request.query_params.get('q', '').strip()
+    limit = int(request.query_params.get('limit', 20))
+    
+    # Boş arama durumunda tüm aktif kullanıcıları getir
+    if not search_term:
+        users = User.objects.filter(is_active=True).order_by('first_name', 'last_name')[:limit]
+    else:
+        # İsim, soyisim veya username'de arama yap
+        users = User.objects.filter(
+            Q(first_name__icontains=search_term) |
+            Q(last_name__icontains=search_term) |
+            Q(username__icontains=search_term),
+            is_active=True
+        ).order_by('first_name', 'last_name')[:limit]
+    
+    # Kullanıcı listesini formatla
+    users_data = []
+    for user in users:
+        full_name = user.get_full_name() or user.username
+        users_data.append({
+            'id': user.id,
+            'username': user.username,
+            'full_name': full_name,
+            'email': user.email,
+            'display_name': f"{full_name} ({user.username})",
+            'is_staff': user.is_staff
+        })
+    
+    return Response({
+        'message': f'{len(users_data)} kullanıcı bulundu',
+        'users': users_data
+    })
 
 @api_view(['POST'])
 @permission_classes([AllowAny])

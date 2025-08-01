@@ -38,18 +38,21 @@ class ColumnPermission(models.Model):
         ('price', 'Fiyat'),
         ('type', 'Tip'),
         ('sales_channel', 'Satış Kanalı'),
+        ('designer', 'Tasarımcı'),
         ('design_start_date', 'Tasarım Başlangıç Tarihi'),
         ('design_end_date', 'Tasarım Bitiş Tarihi'),
         ('confirm_date', 'Onay Tarihi'),
         ('printing_location', 'Baskı Lokasyonu'),
         ('printing_confirm', 'Baskı Onayı'),
+        ('printing_control', 'Baskı Kontrolü'),  # YENİ
+        ('printing_controller', 'Kontrolü Yapan Kişi'),  # YENİ
         ('printing_start_date', 'Baskı Başlangıç Tarihi'),
         ('printing_end_date', 'Baskı Bitiş Tarihi'),
         ('mixed', 'Karışık'),
         ('packaging_date', 'Paketleme Tarihi'),
         ('stock_entry', 'Stok Girişi'),
         ('shipping_date', 'Sevkiyat Tarihi'),
-        ('links', 'Bağlantılar'),  # Yeni - eski link ve link_title yerine
+        ('links', 'Bağlantılar'),
         ('note', 'Not'),
     ]
     

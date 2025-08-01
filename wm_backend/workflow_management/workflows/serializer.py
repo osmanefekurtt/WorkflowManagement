@@ -7,6 +7,7 @@ from django.core.validators import URLValidator
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from django.utils import timezone
+from django.contrib.auth.models import User
 
 
 class LinkListField(serializers.ListField):
@@ -98,6 +99,22 @@ class WorkflowSerializer(serializers.ModelSerializer):
     type_detail = WorkTypeSerializer(source='type', read_only=True)
     sales_channel_detail = SalesChannelSerializer(source='sales_channel', read_only=True)
     
+    # Designer field
+    designer_detail = serializers.SerializerMethodField()
+    designer = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(is_active=True),
+        required=False,
+        allow_null=True
+    )
+    
+    # Printing controller field - YENİ
+    printing_controller_detail = serializers.SerializerMethodField()
+    printing_controller = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(is_active=True),
+        required=False,
+        allow_null=True
+    )
+    
     # Links field with custom validation
     links = LinkListField(required=False, allow_empty=True)
 
@@ -121,6 +138,16 @@ class WorkflowSerializer(serializers.ModelSerializer):
     class Meta:
         model = Work
         fields = '__all__'
+    
+    def get_designer_detail(self, obj):
+        if obj.designer:
+            return {
+                'id': obj.designer.id,
+                'username': obj.designer.username,
+                'full_name': obj.designer.get_full_name() or obj.designer.username,
+                'email': obj.designer.email
+            }
+        return None
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -132,14 +159,19 @@ class WorkflowSerializer(serializers.ModelSerializer):
             data['type_name'] = data['type_detail']['name']
         if 'sales_channel_detail' in data and data['sales_channel_detail']:
             data['sales_channel_name'] = data['sales_channel_detail']['name']
+        if 'designer_detail' in data and data['designer_detail']:
+            data['designer_name'] = data['designer_detail']['full_name']
         
         # Geriye dönük uyumluluk için eski link alanlarını doldur
         if instance.links and len(instance.links) > 0:
             data['link'] = instance.links[0].get('url')
             data['link_title'] = instance.links[0].get('title', '')
+
+        if 'printing_controller_detail' in data and data['printing_controller_detail']:
+            data['printing_controller_name'] = data['printing_controller_detail']['full_name']
         
         return data
-    
+            
     def create(self, validated_data):
         # Link eklerken kullanıcı bilgisini ekle
         request = self.context.get('request')
@@ -151,21 +183,50 @@ class WorkflowSerializer(serializers.ModelSerializer):
         
         return super().create(validated_data)
     
-    def update(self, instance, validated_data):
-        # Yeni link eklenirken kullanıcı bilgisini ekle
+    def get_printing_controller_detail(self, obj):
+        if obj.printing_controller:
+            return {
+                'id': obj.printing_controller.id,
+                'username': obj.printing_controller.username,
+                'full_name': obj.printing_controller.get_full_name() or obj.printing_controller.username,
+                'email': obj.printing_controller.email
+            }
+        return None
+    
+    def validate(self, attrs):
+        """Yazma yetkisi ve iş mantığı kontrolü"""
+        # Printing control validation
+        if 'printing_control' in attrs or 'printing_controller' in attrs:
+            printing_control = attrs.get('printing_control', self.instance.printing_control if self.instance else False)
+            printing_controller = attrs.get('printing_controller', self.instance.printing_controller if self.instance else None)
+            
+            # Eğer printing_control false ise, printing_controller null olmalı
+            if not printing_control and printing_controller:
+                raise serializers.ValidationError({
+                    'printing_controller': 'Baskı kontrolü seçili değilken kontrolü yapan kişi atanamaz.'
+                })
+        
+        # Mevcut yetki kontrolü
         request = self.context.get('request')
-        if request and 'links' in validated_data:
-            existing_links = instance.links or []
-            new_links = validated_data.get('links', [])
+        if request and hasattr(request, 'user'):
+            user = request.user
             
-            # Yeni eklenen linkleri tespit et
-            existing_urls = {link.get('url') for link in existing_links}
-            user_info = f"{request.user.get_full_name() or request.user.username} ({request.user.id})"
-            
-            for link in new_links:
-                if link.get('url') not in existing_urls:
-                    link['added_by'] = user_info
-                    link['added_at'] = timezone.now().isoformat()
+            if not user.is_superuser and self.instance:
+                is_valid, error_message = PermissionChecker.validate_writable_fields(user, attrs)
+                if not is_valid:
+                    raise serializers.ValidationError(error_message)
+        
+        return attrs
+    
+    def update(self, instance, validated_data):
+        # Eğer printing_control true yapılıyorsa ve daha önce false ise, kontrol tarihini kaydet
+        if validated_data.get('printing_control') and not instance.printing_control:
+            validated_data['printing_control_date'] = timezone.now()
+        
+        # Eğer printing_control false yapılıyorsa, ilgili alanları temizle
+        if 'printing_control' in validated_data and not validated_data['printing_control']:
+            validated_data['printing_controller'] = None
+            validated_data['printing_control_date'] = None
         
         return super().update(instance, validated_data)
 
