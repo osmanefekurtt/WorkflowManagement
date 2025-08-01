@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { useUsersAndRoles } from '../hooks';
 import api from '../services/api';
-import './UserModal.css';
+import './css/UserModal.css';
 
 const UserModal = ({ isOpen, onClose, onSave, user = null }) => {
   const [formData, setFormData] = useState({

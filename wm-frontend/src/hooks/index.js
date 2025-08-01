@@ -1,11 +1,9 @@
-// src/hooks/index.js
 import { useApp } from '../contexts/AppContext';
 import { useCallback, useMemo } from 'react';
 import permissionService from '../services/permissionService';
 
-// Export context hooks
+// Re-export
 export { useApp } from '../contexts/AppContext';
-// Export useOnce hook
 export { useOnce } from './useOnce';
 
 // Auth Hook
@@ -24,25 +22,30 @@ export const useAuth = () => {
 export const usePermissions = () => {
   const { state } = useApp();
   
-  const canCreateWork = useMemo(() => {
-    return state.user?.is_superuser || state.systemPermissions.work_create;
-  }, [state.user, state.systemPermissions]);
+  const canCreateWork = useMemo(() => 
+    state.user?.is_superuser || state.systemPermissions.work_create,
+    [state.user, state.systemPermissions]
+  );
   
-  const canDeleteWork = useMemo(() => {
-    return state.user?.is_superuser || state.systemPermissions.work_delete;
-  }, [state.user, state.systemPermissions]);
+  const canDeleteWork = useMemo(() => 
+    state.user?.is_superuser || state.systemPermissions.work_delete,
+    [state.user, state.systemPermissions]
+  );
   
-  const canReadField = useCallback((fieldName) => {
-    return permissionService.canRead(state.workPermissions, fieldName);
-  }, [state.workPermissions]);
+  const canReadField = useCallback(fieldName => 
+    permissionService.canRead(state.workPermissions, fieldName),
+    [state.workPermissions]
+  );
   
-  const canWriteField = useCallback((fieldName) => {
-    return permissionService.canWrite(state.workPermissions, fieldName);
-  }, [state.workPermissions]);
+  const canWriteField = useCallback(fieldName => 
+    permissionService.canWrite(state.workPermissions, fieldName),
+    [state.workPermissions]
+  );
   
-  const hasFieldPermission = useCallback((fieldName) => {
-    return permissionService.hasPermission(state.workPermissions, fieldName);
-  }, [state.workPermissions]);
+  const hasFieldPermission = useCallback(fieldName => 
+    permissionService.hasPermission(state.workPermissions, fieldName),
+    [state.workPermissions]
+  );
   
   return {
     workPermissions: state.workPermissions,
@@ -59,15 +62,14 @@ export const usePermissions = () => {
 export const useWorks = () => {
   const { state, actions } = useApp();
   
-  const filteredWorks = useMemo(() => {
-    return state.works.filter(work => {
-      if (state.filters.workStatus === 'active') {
-        return work.status_code !== 'completed';
-      } else {
-        return work.status_code === 'completed';
-      }
-    });
-  }, [state.works, state.filters.workStatus]);
+  const filteredWorks = useMemo(() => 
+    state.works.filter(work => 
+      state.filters.workStatus === 'active' 
+        ? work.status_code !== 'completed' 
+        : work.status_code === 'completed'
+    ),
+    [state.works, state.filters.workStatus]
+  );
   
   return {
     works: state.works,
@@ -88,8 +90,8 @@ export const useWorks = () => {
 export const useMovements = () => {
   const { state, actions } = useApp();
   
-  const filteredMovements = useMemo(() => {
-    return state.movements.filter(movement => {
+  const filteredMovements = useMemo(() => 
+    state.movements.filter(movement => {
       // Action filter
       if (state.filters.movementAction !== 'all' && movement.action !== state.filters.movementAction) {
         return false;
@@ -106,8 +108,9 @@ export const useMovements = () => {
       }
 
       return true;
-    });
-  }, [state.movements, state.filters.movementAction, state.filters.searchTerm]);
+    }),
+    [state.movements, state.filters.movementAction, state.filters.searchTerm]
+  );
   
   return {
     movements: state.movements,

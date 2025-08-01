@@ -1,12 +1,11 @@
-// src/components/RoleModal.js
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import { useUI } from '../hooks';
 import api from '../services/api';
-import './RoleModal.css';
+import './css/RoleModal.css';
 
 const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
-  const [formData, setFormData] = useState({
+  const initialFormData = {
     name: '',
     description: '',
     permissions: {},
@@ -14,16 +13,16 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
       work_create: false,
       work_delete: false
     }
-  });
+  };
   
+  const [formData, setFormData] = useState(initialFormData);
   const [availableColumns, setAvailableColumns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   
-  // Context hook
   const { showToast } = useUI();
 
-  const categorizeColumns = (columns) => {
+  const categorizeColumns = columns => {
     const categories = {
       basic: {
         title: 'Temel Bilgiler',
@@ -41,8 +40,8 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
         columns: [
           'printing_location', 
           'printing_confirm', 
-          'printing_control',     // YENİ
-          'printing_controller',  // YENİ
+          'printing_control',
+          'printing_controller',
           'printing_start_date', 
           'printing_end_date'
         ]
@@ -71,14 +70,14 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
     return categorizedColumns;
   };
 
-  // Mevcut kolonları yükle
+  // Load available columns
   useEffect(() => {
     if (isOpen) {
       fetchAvailableColumns();
     }
   }, [isOpen]);
 
-  // Role verisi gelirse formu doldur
+  // Initialize form with role data
   useEffect(() => {
     if (role) {
       setFormData({
@@ -90,10 +89,9 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
           work_delete: false
         }
       });
-      // Rol izinlerini yükle
       fetchRolePermissions(role.id);
     } else {
-      // Yeni rol için varsayılan izinler (hepsi read)
+      // New role - default permissions
       const defaultPermissions = {};
       availableColumns.forEach(col => {
         defaultPermissions[col.column_name] = 'read';
@@ -124,7 +122,7 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
     }
   };
 
-  const fetchRolePermissions = async (roleId) => {
+  const fetchRolePermissions = async roleId => {
     try {
       const response = await api.get(`/permissions/roles/${roleId}/`);
       if (response.data.success) {
@@ -134,24 +132,19 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
           work_delete: false
         };
         
-        // Önce tüm kolonlara 'none' ver
+        // Initialize all columns with 'none'
         availableColumns.forEach(col => {
           permissions[col.column_name] = 'none';
         });
         
-        // Sonra mevcut kolon izinlerini güncelle
-        if (response.data.data.column_permissions) {
-          response.data.data.column_permissions.forEach(perm => {
-            permissions[perm.column_name] = perm.permission;
-          });
-        }
+        // Update with actual permissions
+        response.data.data.column_permissions?.forEach(perm => {
+          permissions[perm.column_name] = perm.permission;
+        });
         
-        // Sistem izinlerini güncelle
-        if (response.data.data.system_permissions) {
-          response.data.data.system_permissions.forEach(perm => {
-            systemPermissions[perm.permission_type] = perm.granted;
-          });
-        }
+        response.data.data.system_permissions?.forEach(perm => {
+          systemPermissions[perm.permission_type] = perm.granted;
+        });
         
         setFormData(prev => ({
           ...prev,
@@ -165,12 +158,9 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
     }
   };
 
-  const handleChange = (e) => {
+  const handleChange = e => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
     
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
@@ -187,7 +177,7 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
     }));
   };
 
-  const handleSystemPermissionChange = (permissionType) => {
+  const handleSystemPermissionChange = permissionType => {
     setFormData(prev => ({
       ...prev,
       system_permissions: {
@@ -202,10 +192,7 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
     categoryColumns.forEach(col => {
       updatedPermissions[col.column_name] = permission;
     });
-    setFormData(prev => ({
-      ...prev,
-      permissions: updatedPermissions
-    }));
+    setFormData(prev => ({ ...prev, permissions: updatedPermissions }));
   };
 
   const validateForm = () => {
@@ -219,7 +206,7 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault();
     
     if (!validateForm()) {
@@ -228,15 +215,13 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
     
     setLoading(true);
     
-    const dataToSend = {
-      name: formData.name,
-      description: formData.description,
-      permissions: formData.permissions,
-      system_permissions: formData.system_permissions
-    };
-    
     try {
-      await onSave(dataToSend);
+      await onSave({
+        name: formData.name,
+        description: formData.description,
+        permissions: formData.permissions,
+        system_permissions: formData.system_permissions
+      });
       onClose();
     } catch (error) {
       console.error('Kaydetme hatası:', error);
@@ -283,50 +268,15 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
           </div>
         </div>
 
-        {/* Sistem İzinleri */}
+        {/* System Permissions */}
         <div className="permissions-container">
-          <div className="system-permissions-card">
-            <h3 className="section-title">
-              <span className="section-icon">⚙️</span>
-              Sistem İzinleri
-            </h3>
-            
-            <div className="system-permissions-grid">
-              <div className="system-permission-item">
-                <label className="switch-label">
-                  <input
-                    type="checkbox"
-                    checked={formData.system_permissions.work_create}
-                    onChange={() => handleSystemPermissionChange('work_create')}
-                    disabled={loading}
-                  />
-                  <span className="switch-slider"></span>
-                  <div className="permission-content">
-                    <span className="permission-name">İş Oluşturma</span>
-                    <span className="permission-desc">Yeni iş kaydı oluşturabilir</span>
-                  </div>
-                </label>
-              </div>
-              
-              <div className="system-permission-item">
-                <label className="switch-label">
-                  <input
-                    type="checkbox"
-                    checked={formData.system_permissions.work_delete}
-                    onChange={() => handleSystemPermissionChange('work_delete')}
-                    disabled={loading}
-                  />
-                  <span className="switch-slider"></span>
-                  <div className="permission-content">
-                    <span className="permission-name">İş Silme</span>
-                    <span className="permission-desc">Mevcut iş kayıtlarını silebilir</span>
-                  </div>
-                </label>
-              </div>
-            </div>
-          </div>
+          <SystemPermissions 
+            permissions={formData.system_permissions}
+            onChange={handleSystemPermissionChange}
+            loading={loading}
+          />
 
-          {/* Kolon Yetkileri */}
+          {/* Column Permissions */}
           <div className="column-permissions-section">
             <h3 className="section-title">
               <span className="section-icon">🔐</span>
@@ -336,85 +286,14 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
             <div className="permissions-categories">
               {Object.entries(categorizedColumns).map(([categoryKey, category]) => (
                 category.columns.length > 0 && (
-                  <div key={categoryKey} className="permission-category-card">
-                    <div className="category-header">
-                      <div className="category-title">
-                        <span className="category-icon">{category.icon}</span>
-                        <h4>{category.title}</h4>
-                      </div>
-                      <div className="bulk-actions">
-                        <button
-                          type="button"
-                          className="bulk-btn bulk-none"
-                          onClick={() => setCategoryPermission(category.columns, 'none')}
-                          title="Tümüne Yetki Yok"
-                        >
-                          Yetki Yok
-                        </button>
-                        <button
-                          type="button"
-                          className="bulk-btn bulk-read"
-                          onClick={() => setCategoryPermission(category.columns, 'read')}
-                          title="Tümüne Okuma"
-                        >
-                          Okuma
-                        </button>
-                        <button
-                          type="button"
-                          className="bulk-btn bulk-write"
-                          onClick={() => setCategoryPermission(category.columns, 'write')}
-                          title="Tümüne Yazma"
-                        >
-                          Yazma
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div className="category-permissions">
-                      {category.columns.map(column => (
-                        <div key={column.column_name} className="permission-item">
-                          <span className="column-label">{column.display_name}</span>
-                          <div className="permission-controls">
-                            <label className={`permission-option ${formData.permissions[column.column_name] === 'none' ? 'active' : ''}`}>
-                              <input
-                                type="radio"
-                                name={`perm_${column.column_name}`}
-                                value="none"
-                                checked={formData.permissions[column.column_name] === 'none'}
-                                onChange={() => handlePermissionChange(column.column_name, 'none')}
-                                disabled={loading}
-                              />
-                              <span className="option-label none">✖</span>
-                            </label>
-                            
-                            <label className={`permission-option ${formData.permissions[column.column_name] === 'read' ? 'active' : ''}`}>
-                              <input
-                                type="radio"
-                                name={`perm_${column.column_name}`}
-                                value="read"
-                                checked={formData.permissions[column.column_name] === 'read'}
-                                onChange={() => handlePermissionChange(column.column_name, 'read')}
-                                disabled={loading}
-                              />
-                              <span className="option-label read">👁️</span>
-                            </label>
-                            
-                            <label className={`permission-option ${formData.permissions[column.column_name] === 'write' ? 'active' : ''}`}>
-                              <input
-                                type="radio"
-                                name={`perm_${column.column_name}`}
-                                value="write"
-                                checked={formData.permissions[column.column_name] === 'write'}
-                                onChange={() => handlePermissionChange(column.column_name, 'write')}
-                                disabled={loading}
-                              />
-                              <span className="option-label write">✏️</span>
-                            </label>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <PermissionCategory
+                    key={categoryKey}
+                    category={category}
+                    permissions={formData.permissions}
+                    onPermissionChange={handlePermissionChange}
+                    onBulkChange={setCategoryPermission}
+                    loading={loading}
+                  />
                 )
               ))}
             </div>
@@ -440,6 +319,133 @@ const RoleModal = ({ isOpen, onClose, onSave, role = null }) => {
         </div>
       </form>
     </Modal>
+  );
+};
+
+// Sub-components
+const SystemPermissions = ({ permissions, onChange, loading }) => (
+  <div className="system-permissions-card">
+    <h3 className="section-title">
+      <span className="section-icon">⚙️</span>
+      Sistem İzinleri
+    </h3>
+    
+    <div className="system-permissions-grid">
+      <SystemPermissionItem
+        label="İş Oluşturma"
+        description="Yeni iş kaydı oluşturabilir"
+        checked={permissions.work_create}
+        onChange={() => onChange('work_create')}
+        disabled={loading}
+      />
+      
+      <SystemPermissionItem
+        label="İş Silme"
+        description="Mevcut iş kayıtlarını silebilir"
+        checked={permissions.work_delete}
+        onChange={() => onChange('work_delete')}
+        disabled={loading}
+      />
+    </div>
+  </div>
+);
+
+const SystemPermissionItem = ({ label, description, checked, onChange, disabled }) => (
+  <div className="system-permission-item">
+    <label className="switch-label">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        disabled={disabled}
+      />
+      <span className="switch-slider"></span>
+      <div className="permission-content">
+        <span className="permission-name">{label}</span>
+        <span className="permission-desc">{description}</span>
+      </div>
+    </label>
+  </div>
+);
+
+const PermissionCategory = ({ category, permissions, onPermissionChange, onBulkChange, loading }) => (
+  <div className="permission-category-card">
+    <div className="category-header">
+      <div className="category-title">
+        <span className="category-icon">{category.icon}</span>
+        <h4>{category.title}</h4>
+      </div>
+      <div className="bulk-actions">
+        <button
+          type="button"
+          className="bulk-btn bulk-none"
+          onClick={() => onBulkChange(category.columns, 'none')}
+          title="Tümüne Yetki Yok"
+        >
+          Yetki Yok
+        </button>
+        <button
+          type="button"
+          className="bulk-btn bulk-read"
+          onClick={() => onBulkChange(category.columns, 'read')}
+          title="Tümüne Okuma"
+        >
+          Okuma
+        </button>
+        <button
+          type="button"
+          className="bulk-btn bulk-write"
+          onClick={() => onBulkChange(category.columns, 'write')}
+          title="Tümüne Yazma"
+        >
+          Yazma
+        </button>
+      </div>
+    </div>
+    
+    <div className="category-permissions">
+      {category.columns.map(column => (
+        <PermissionItem
+          key={column.column_name}
+          column={column}
+          permission={permissions[column.column_name]}
+          onChange={onPermissionChange}
+          disabled={loading}
+        />
+      ))}
+    </div>
+  </div>
+);
+
+const PermissionItem = ({ column, permission, onChange, disabled }) => {
+  const options = [
+    { value: 'none', label: '✖', className: 'none' },
+    { value: 'read', label: '👁️', className: 'read' },
+    { value: 'write', label: '✏️', className: 'write' }
+  ];
+  
+  return (
+    <div className="permission-item">
+      <span className="column-label">{column.display_name}</span>
+      <div className="permission-controls">
+        {options.map(option => (
+          <label 
+            key={option.value}
+            className={`permission-option ${permission === option.value ? 'active' : ''}`}
+          >
+            <input
+              type="radio"
+              name={`perm_${column.column_name}`}
+              value={option.value}
+              checked={permission === option.value}
+              onChange={() => onChange(column.column_name, option.value)}
+              disabled={disabled}
+            />
+            <span className={`option-label ${option.className}`}>{option.label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
   );
 };
 

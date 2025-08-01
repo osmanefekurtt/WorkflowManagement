@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDropdowns, useUI } from '../hooks';
 import api from '../services/api';
-import './DropdownManager.css';
+import './css/DropdownManager.css';
 
 const DropdownManager = ({ title, endpoint, onUpdate }) => {
   const [items, setItems] = useState([]);

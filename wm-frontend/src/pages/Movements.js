@@ -1,9 +1,8 @@
-// src/pages/Movements.js
 import React, { useEffect } from 'react';
 import Layout from '../components/Layout';
 import ToastContainer from '../components/ToastContainer';
 import { useMovements, useUI, useAuth, useOnce } from '../hooks';
-import './Movements.css';
+import './css/Movements.css';
 
 const Movements = () => {
   const { user } = useAuth();
@@ -20,9 +19,8 @@ const Movements = () => {
     setFilter 
   } = useUI();
 
-  // İlk yükleme - sadece bir kere çalışır
+  // Initial load with permission check
   useOnce(() => {
-    // Staff değilse dashboard'a yönlendir
     if (!user?.is_staff) {
       showToast('Bu sayfayı görüntüleme yetkiniz yok.', 'error');
       setTimeout(() => {
@@ -34,44 +32,27 @@ const Movements = () => {
     fetchMovements();
   });
 
-  // Auto refresh every 10 seconds
+  // Auto refresh
   useEffect(() => {
     if (user?.is_staff) {
-      const interval = setInterval(() => {
-        fetchMovements();
-      }, 10000);
-      
+      const interval = setInterval(fetchMovements, 10000);
       return () => clearInterval(interval);
     }
   }, [user]);
 
-  const getActionIcon = (action) => {
-    switch (action) {
-      case 'create':
-        return '➕';
-      case 'update':
-        return '✏️';
-      case 'delete':
-        return '🗑️';
-      default:
-        return '📝';
-    }
+  // Helpers
+  const getActionIcon = action => {
+    const icons = {
+      create: '➕',
+      update: '✏️',
+      delete: '🗑️'
+    };
+    return icons[action] || '📝';
   };
 
-  const getActionColor = (action) => {
-    switch (action) {
-      case 'create':
-        return 'action-create';
-      case 'update':
-        return 'action-update';
-      case 'delete':
-        return 'action-delete';
-      default:
-        return '';
-    }
-  };
+  const getActionColor = action => `action-${action}`;
 
-  const formatDate = (dateString) => {
+  const formatDate = dateString => {
     const date = new Date(dateString);
     return date.toLocaleString('tr-TR', {
       day: '2-digit',
@@ -82,7 +63,7 @@ const Movements = () => {
     });
   };
 
-  const formatValue = (value) => {
+  const formatValue = value => {
     if (value && typeof value === 'object' && value.display) {
       return value.display;
     }
@@ -105,11 +86,9 @@ const Movements = () => {
     return String(value);
   };
 
-  const formatChanges = (changes) => {
+  const formatChanges = changes => {
     if (!changes || !changes.old || !changes.new) return null;
 
-    const changedFields = [];
-    
     const fieldNames = {
       name: 'İsim',
       category: 'Kategori',
@@ -121,6 +100,8 @@ const Movements = () => {
       confirm_date: 'Onay Tarihi',
       printing_location: 'Baskı Lokasyonu',
       printing_confirm: 'Baskı Onayı',
+      printing_control: 'Baskı Kontrolü',
+      printing_controller: 'Kontrolü Yapan',
       printing_start_date: 'Baskı Başlangıç',
       printing_end_date: 'Baskı Bitiş',
       mixed: 'Karışık',
@@ -132,18 +113,13 @@ const Movements = () => {
       note: 'Not'
     };
     
-    Object.keys(changes.old).forEach(key => {
-      const oldValue = formatValue(changes.old[key]);
-      const newValue = formatValue(changes.new[key]);
-      
-      if (oldValue !== newValue) {
-        changedFields.push({
-          field: fieldNames[key] || key,
-          old: oldValue,
-          new: newValue
-        });
-      }
-    });
+    const changedFields = Object.keys(changes.old)
+      .filter(key => formatValue(changes.old[key]) !== formatValue(changes.new[key]))
+      .map(key => ({
+        field: fieldNames[key] || key,
+        old: formatValue(changes.old[key]),
+        new: formatValue(changes.new[key])
+      }));
 
     return changedFields.length > 0 ? changedFields : null;
   };
@@ -169,7 +145,7 @@ const Movements = () => {
             <label>İşlem Tipi:</label>
             <select 
               value={filters.movementAction} 
-              onChange={(e) => setFilter('movementAction', e.target.value)}
+              onChange={e => setFilter('movementAction', e.target.value)}
               className="filter-select"
             >
               <option value="all">Tümü</option>
@@ -185,7 +161,7 @@ const Movements = () => {
               type="text"
               placeholder="Kullanıcı, iş adı veya açıklama..."
               value={filters.searchTerm}
-              onChange={(e) => setFilter('searchTerm', e.target.value)}
+              onChange={e => setFilter('searchTerm', e.target.value)}
               className="filter-search"
             />
           </div>
@@ -203,56 +179,82 @@ const Movements = () => {
             </div>
           ) : (
             <div className="movements-timeline">
-              {filteredMovements.map((movement) => (
-                <div key={movement.id} className="movement-item">
-                  <div className="movement-icon">
-                    <span className={`icon ${getActionColor(movement.action)}`}>
-                      {getActionIcon(movement.action)}
-                    </span>
-                  </div>
-                  
-                  <div className="movement-content">
-                    <div className="movement-header">
-                      <h3>{movement.description}</h3>
-                      <span className="movement-date">
-                        {formatDate(movement.created)}
-                      </span>
-                    </div>
-                    
-                    <div className="movement-meta">
-                      <span className="meta-item">
-                        <strong>Kullanıcı:</strong> {movement.user_display || movement.user_fullname || movement.user?.username || 'Bilinmiyor'}
-                      </span>
-                      {(movement.work || movement.work_name) && (
-                        <span className="meta-item">
-                          <strong>İş:</strong> {movement.work_display || movement.work_name || movement.work?.name || '-'}
-                        </span>
-                      )}
-                    </div>
-                    
-                    {movement.changes && movement.action === 'update' && (
-                      <div className="movement-changes">
-                        <h4>Değişiklikler:</h4>
-                        <div className="changes-list">
-                          {formatChanges(movement.changes)?.map((change, index) => (
-                            <div key={index} className="change-item">
-                              <span className="change-field">{change.field}:</span>
-                              <span className="change-old">{change.old}</span>
-                              <span className="change-arrow">→</span>
-                              <span className="change-new">{change.new}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+              {filteredMovements.map(movement => (
+                <MovementItem 
+                  key={movement.id}
+                  movement={movement}
+                  getActionIcon={getActionIcon}
+                  getActionColor={getActionColor}
+                  formatDate={formatDate}
+                  formatChanges={formatChanges}
+                />
               ))}
             </div>
           )}
         </div>
       </div>
     </Layout>
+  );
+};
+
+// Movement Item Component
+const MovementItem = ({ movement, getActionIcon, getActionColor, formatDate, formatChanges }) => {
+  const changes = formatChanges(movement.changes);
+  
+  return (
+    <div className="movement-item">
+      <div className="movement-icon">
+        <span className={`icon ${getActionColor(movement.action)}`}>
+          {getActionIcon(movement.action)}
+        </span>
+      </div>
+      
+      <div className="movement-content">
+        <div className="movement-header">
+          <h3>{movement.description}</h3>
+          <span className="movement-date">
+            {formatDate(movement.created)}
+          </span>
+        </div>
+        
+        <div className="movement-meta">
+          <span className="meta-item">
+            <strong>Kullanıcı:</strong> {
+              movement.user_display || 
+              movement.user_fullname || 
+              movement.user?.username || 
+              'Bilinmiyor'
+            }
+          </span>
+          {(movement.work || movement.work_name) && (
+            <span className="meta-item">
+              <strong>İş:</strong> {
+                movement.work_display || 
+                movement.work_name || 
+                movement.work?.name || 
+                '-'
+              }
+            </span>
+          )}
+        </div>
+        
+        {movement.changes && movement.action === 'update' && changes && (
+          <div className="movement-changes">
+            <h4>Değişiklikler:</h4>
+            <div className="changes-list">
+              {changes.map((change, index) => (
+                <div key={index} className="change-item">
+                  <span className="change-field">{change.field}:</span>
+                  <span className="change-old">{change.old}</span>
+                  <span className="change-arrow">→</span>
+                  <span className="change-new">{change.new}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 

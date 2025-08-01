@@ -1,9 +1,10 @@
-# permissions/serializers.py
 from rest_framework import serializers
 from .models import Role, ColumnPermission, UserRole, SystemPermission
 from django.contrib.auth.models import User
 
+
 class ColumnPermissionSerializer(serializers.ModelSerializer):
+    """Kolon yetkileri"""
     column_display = serializers.CharField(source='get_column_name_display', read_only=True)
     permission_display = serializers.CharField(source='get_permission_display', read_only=True)
     
@@ -13,6 +14,7 @@ class ColumnPermissionSerializer(serializers.ModelSerializer):
 
 
 class SystemPermissionSerializer(serializers.ModelSerializer):
+    """Sistem izinleri"""
     permission_display = serializers.CharField(source='get_permission_type_display', read_only=True)
     
     class Meta:
@@ -21,6 +23,7 @@ class SystemPermissionSerializer(serializers.ModelSerializer):
 
 
 class RoleSerializer(serializers.ModelSerializer):
+    """Rol detayları"""
     column_permissions = ColumnPermissionSerializer(many=True, read_only=True)
     system_permissions = SystemPermissionSerializer(many=True, read_only=True)
     
@@ -31,25 +34,42 @@ class RoleSerializer(serializers.ModelSerializer):
 
 
 class RoleCreateUpdateSerializer(serializers.ModelSerializer):
-    """
-    Rol oluşturma ve güncelleme için serializer
-    """
+    """Rol oluşturma ve güncelleme"""
     permissions = serializers.DictField(
         child=serializers.ChoiceField(choices=['none', 'read', 'write']),
         write_only=True,
-        required=False,
-        help_text="Kolon adı: yetki tipi şeklinde dictionary. Boş bırakılırsa tüm kolonlara okuma yetkisi verilir."
+        required=False
     )
     system_permissions = serializers.DictField(
         child=serializers.BooleanField(),
         write_only=True,
-        required=False,
-        help_text="{'work_create': true, 'work_delete': false}"
+        required=False
     )
     
     class Meta:
         model = Role
         fields = ['name', 'description', 'permissions', 'system_permissions']
+    
+    def _handle_permissions(self, role, permissions_data, permission_model, choices_attr):
+        """Yetki oluşturma/güncelleme için yardımcı method"""
+        if permissions_data is None:
+            return
+            
+        # Mevcut yetkileri sil
+        if permission_model == ColumnPermission:
+            role.column_permissions.all().delete()
+        else:
+            role.system_permissions.all().delete()
+        
+        # Yeni yetkileri oluştur
+        valid_choices = [choice[0] for choice in getattr(permission_model, choices_attr)]
+        
+        for key, value in permissions_data.items():
+            if key in valid_choices:
+                if permission_model == ColumnPermission:
+                    permission_model.objects.create(role=role, column_name=key, permission=value)
+                else:
+                    permission_model.objects.create(role=role, permission_type=key, granted=value)
     
     def create(self, validated_data):
         permissions_data = validated_data.pop('permissions', {})
@@ -59,27 +79,11 @@ class RoleCreateUpdateSerializer(serializers.ModelSerializer):
         
         # Column permissions
         if permissions_data:
-            # Signal tarafından oluşturulan varsayılan yetkileri sil
             role.column_permissions.all().delete()
-            
-            # Verilen yetkileri oluştur
-            for column_name, permission in permissions_data.items():
-                if column_name in [choice[0] for choice in ColumnPermission.COLUMN_CHOICES]:
-                    ColumnPermission.objects.create(
-                        role=role,
-                        column_name=column_name,
-                        permission=permission
-                    )
-        # Eğer permissions verilmemişse, signal otomatik olarak tüm kolonlara okuma yetkisi verecek
+            self._handle_permissions(role, permissions_data, ColumnPermission, 'COLUMN_CHOICES')
         
         # System permissions
-        for perm_type, granted in system_permissions_data.items():
-            if perm_type in [choice[0] for choice in SystemPermission.PERMISSION_CHOICES]:
-                SystemPermission.objects.create(
-                    role=role,
-                    permission_type=perm_type,
-                    granted=granted
-                )
+        self._handle_permissions(role, system_permissions_data, SystemPermission, 'PERMISSION_CHOICES')
         
         return role
     
@@ -88,42 +92,19 @@ class RoleCreateUpdateSerializer(serializers.ModelSerializer):
         system_permissions_data = validated_data.pop('system_permissions', None)
         
         # Rol bilgilerini güncelle
-        instance.name = validated_data.get('name', instance.name)
-        instance.description = validated_data.get('description', instance.description)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
         instance.save()
         
-        # Column permissions güncelleme
-        if permissions_data is not None:
-            # Mevcut yetkileri sil
-            instance.column_permissions.all().delete()
-            
-            # Yeni yetkileri oluştur
-            for column_name, permission in permissions_data.items():
-                if column_name in [choice[0] for choice in ColumnPermission.COLUMN_CHOICES]:
-                    ColumnPermission.objects.create(
-                        role=instance,
-                        column_name=column_name,
-                        permission=permission
-                    )
-        
-        # System permissions güncelleme
-        if system_permissions_data is not None:
-            # Mevcut sistem izinlerini sil
-            instance.system_permissions.all().delete()
-            
-            # Yeni sistem izinlerini oluştur
-            for perm_type, granted in system_permissions_data.items():
-                if perm_type in [choice[0] for choice in SystemPermission.PERMISSION_CHOICES]:
-                    SystemPermission.objects.create(
-                        role=instance,
-                        permission_type=perm_type,
-                        granted=granted
-                    )
+        # Permissions güncelle
+        self._handle_permissions(instance, permissions_data, ColumnPermission, 'COLUMN_CHOICES')
+        self._handle_permissions(instance, system_permissions_data, SystemPermission, 'PERMISSION_CHOICES')
         
         return instance
 
 
 class UserRoleSerializer(serializers.ModelSerializer):
+    """Kullanıcı-Rol ilişkisi"""
     user_detail = serializers.SerializerMethodField()
     role_detail = RoleSerializer(source='role', read_only=True)
     assigned_by_detail = serializers.SerializerMethodField()
@@ -141,13 +122,13 @@ class UserRoleSerializer(serializers.ModelSerializer):
         }
     
     def get_assigned_by_detail(self, obj):
-        if obj.assigned_by:
-            return {
-                'id': obj.assigned_by.id,
-                'username': obj.assigned_by.username,
-                'full_name': obj.assigned_by.get_full_name() or obj.assigned_by.username
-            }
-        return None
+        if not obj.assigned_by:
+            return None
+        return {
+            'id': obj.assigned_by.id,
+            'username': obj.assigned_by.username,
+            'full_name': obj.assigned_by.get_full_name() or obj.assigned_by.username
+        }
     
     def create(self, validated_data):
         validated_data['assigned_by'] = self.context['request'].user

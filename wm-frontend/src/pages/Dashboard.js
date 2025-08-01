@@ -1,4 +1,3 @@
-// src/pages/Dashboard.js
 import React, { useEffect, useState, useMemo } from 'react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
@@ -7,7 +6,7 @@ import WorkForm from '../components/WorkForm';
 import ToastContainer from '../components/ToastContainer';
 import { useDashboard, useAuth, useOnce } from '../hooks';
 import api from '../services/api';
-import './Dashboard.css';
+import './css/Dashboard.css';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -23,7 +22,7 @@ const Dashboard = () => {
     selectedWork,
     setSelectedWork,
     
-    // Permissions - Context'ten geliyor
+    // Permissions
     systemPermissions,
     
     // UI
@@ -45,26 +44,27 @@ const Dashboard = () => {
   const [isNewWork, setIsNewWork] = useState(false);
   const [saving, setSaving] = useState(false);
   const [workToDelete, setWorkToDelete] = useState(null);
-  
-  // Local sistem izinleri state'i
   const [localSystemPermissions, setLocalSystemPermissions] = useState({
     work_create: false,
     work_delete: false
   });
 
-  // İlk yükleme - sadece bir kere çalışır
+  // Initial load
   useOnce(() => {
     fetchWorks();
     fetchDropdowns();
     checkUserPermissions();
   });
 
-  // Sistem izinlerini kontrol et
+  // Auto refresh
+  useEffect(() => {
+    const interval = setInterval(fetchWorks, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   const checkUserPermissions = async () => {
     try {
       const response = await api.get('/permissions/my-system-permissions/');
-      console.log('System permissions response:', response.data);
-      
       if (response.data.success) {
         setLocalSystemPermissions({
           work_create: response.data.data.work_create || false,
@@ -76,61 +76,36 @@ const Dashboard = () => {
     }
   };
 
-  // Auto refresh every 10 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchWorks();
-    }, 10000);
-    
-    return () => clearInterval(interval);
-  }, []);
+  // Filtered and enriched works
+  const { filteredWorks, enrichedWorks } = useMemo(() => {
+    const filtered = works.filter(work => 
+      filters.workStatus === 'active' 
+        ? work.status_code !== 'completed' 
+        : work.status_code === 'completed'
+    );
 
-  // Filtrelenmiş işler
-  const filteredWorks = useMemo(() => {
-    return works.filter(work => {
-      if (filters.workStatus === 'active') {
-        return work.status_code !== 'completed';
-      } else {
-        return work.status_code === 'completed';
-      }
-    });
-  }, [works, filters.workStatus]);
-
-  // ID'lerden isimleri bulmak için helper fonksiyonlar
-  const getCategoryName = (categoryId) => {
-    if (!categoryId) return '-';
-    const category = categories.find(c => c.id === categoryId);
-    return category ? category.name : '-';
-  };
-
-  const getTypeName = (typeId) => {
-    if (!typeId) return '-';
-    const type = workTypes.find(t => t.id === typeId);
-    return type ? type.name : '-';
-  };
-
-  const getSalesChannelName = (salesChannelId) => {
-    if (!salesChannelId) return '-';
-    const channel = salesChannels.find(sc => sc.id === salesChannelId);
-    return channel ? channel.name : '-';
-  };
-
-  // Works listesini dropdown isimleriyle zenginleştir
-  const enrichedWorks = useMemo(() => {
-    return filteredWorks.map(work => ({
+    const enriched = filtered.map(work => ({
       ...work,
-      // Eğer detail alanları yoksa, ID'lerden isimleri bul
-      category_name: work.category_name || work.category_detail?.name || getCategoryName(work.category),
-      type_name: work.type_name || work.type_detail?.name || getTypeName(work.type),
-      sales_channel_name: work.sales_channel_name || work.sales_channel_detail?.name || getSalesChannelName(work.sales_channel)
+      category_name: work.category_name || work.category_detail?.name || getDropdownName(categories, work.category),
+      type_name: work.type_name || work.type_detail?.name || getDropdownName(workTypes, work.type),
+      sales_channel_name: work.sales_channel_name || work.sales_channel_detail?.name || getDropdownName(salesChannels, work.sales_channel)
     }));
-  }, [filteredWorks, categories, workTypes, salesChannels]);
 
-  // İzin kontrolleri
+    return { filteredWorks: filtered, enrichedWorks: enriched };
+  }, [works, filters.workStatus, categories, workTypes, salesChannels]);
+
+  // Helpers
+  const getDropdownName = (items, id) => {
+    if (!id) return '-';
+    const item = items.find(i => i.id === id);
+    return item ? item.name : '-';
+  };
+
   const canCreateWork = user?.is_superuser || localSystemPermissions.work_create || systemPermissions?.work_create;
   const canDeleteWork = user?.is_superuser || localSystemPermissions.work_delete || systemPermissions?.work_delete;
 
-  const handleWorkClick = (work) => {
+  // Handlers
+  const handleWorkClick = work => {
     setSelectedWork(work);
     setIsNewWork(false);
     toggleModal('workModal', true);
@@ -148,16 +123,12 @@ const Dashboard = () => {
     setIsNewWork(false);
   };
 
-  const handleSaveWork = async (workData) => {
+  const handleSaveWork = async workData => {
     setSaving(true);
     try {
-      let result;
-      
-      if (isNewWork) {
-        result = await createWork(workData);
-      } else {
-        result = await updateWork(selectedWork.id, workData);
-      }
+      const result = isNewWork 
+        ? await createWork(workData)
+        : await updateWork(selectedWork.id, workData);
       
       if (result.success) {
         handleCloseModal();
@@ -167,7 +138,7 @@ const Dashboard = () => {
     }
   };
 
-  const handleDeleteWork = (workId) => {
+  const handleDeleteWork = workId => {
     setWorkToDelete(workId);
     toggleModal('confirmModal', true);
   };
@@ -184,17 +155,9 @@ const Dashboard = () => {
     setWorkToDelete(null);
   };
 
-  // Debug için
-  console.log('Works:', works);
-  console.log('Filtered Works:', filteredWorks);
-  console.log('Enriched Works:', enrichedWorks);
-  console.log('Can Create:', canCreateWork);
-  console.log('Can Delete:', canDeleteWork);
-
   return (
     <Layout>
       <div className="dashboard">
-        {/* Toast Notifications */}
         <ToastContainer toasts={toasts} removeToast={removeToast} />
         
         {/* Header */}
@@ -209,29 +172,9 @@ const Dashboard = () => {
 
         {/* Stats Cards */}
         <div className="stats-container">
-          <div className="stat-card">
-            <div className="stat-icon blue">📋</div>
-            <div className="stat-content">
-              <div className="stat-number">{stats.total}</div>
-              <div className="stat-label">Toplam İş</div>
-            </div>
-          </div>
-          
-          <div className="stat-card">
-            <div className="stat-icon orange">⏳</div>
-            <div className="stat-content">
-              <div className="stat-number">{stats.inProgress}</div>
-              <div className="stat-label">Devam Eden</div>
-            </div>
-          </div>
-          
-          <div className="stat-card">
-            <div className="stat-icon green">✅</div>
-            <div className="stat-content">
-              <div className="stat-number">{stats.completed}</div>
-              <div className="stat-label">Tamamlanan</div>
-            </div>
-          </div>
+          <StatCard icon="📋" label="Toplam İş" value={stats.total} color="blue" />
+          <StatCard icon="⏳" label="Devam Eden" value={stats.inProgress} color="orange" />
+          <StatCard icon="✅" label="Tamamlanan" value={stats.completed} color="green" />
         </div>
 
         {/* Works Table */}
@@ -239,18 +182,16 @@ const Dashboard = () => {
           <div className="works-header">
             <h2>İş Listesi</h2>
             <div className="filter-buttons">
-              <button 
-                className={`filter-btn ${filters.workStatus === 'active' ? 'active' : ''}`}
+              <FilterButton 
+                active={filters.workStatus === 'active'}
                 onClick={() => setFilter('workStatus', 'active')}
-              >
-                Devam Eden ({stats.inProgress})
-              </button>
-              <button 
-                className={`filter-btn ${filters.workStatus === 'completed' ? 'active' : ''}`}
+                label={`Devam Eden (${stats.inProgress})`}
+              />
+              <FilterButton 
+                active={filters.workStatus === 'completed'}
                 onClick={() => setFilter('workStatus', 'completed')}
-              >
-                Tamamlanan ({stats.completed})
-              </button>
+                label={`Tamamlanan (${stats.completed})`}
+              />
             </div>
           </div>
           
@@ -273,35 +214,12 @@ const Dashboard = () => {
                 </thead>
                 <tbody>
                   {enrichedWorks.map((work, index) => (
-                    <tr 
-                      key={work.id} 
-                      className="work-row"
+                    <WorkRow 
+                      key={work.id}
+                      work={work}
+                      index={index}
                       onClick={() => handleWorkClick(work)}
-                    >
-                      <td>{index + 1}</td>
-                      <td className="work-name">{work.name || '-'}</td>
-                      <td>{work.category_name || '-'}</td>
-                      <td>{work.price ? `${work.price} TL` : '-'}</td>
-                      <td>{work.type_name || '-'}</td>
-                      <td>{work.sales_channel_name || '-'}</td>
-                      <td>
-                        <span className="link-count">
-                          {work.links && work.links.length > 0 ? (
-                            <>🔗 {work.links.length}</>
-                          ) : (
-                            '-'
-                          )}
-                        </span>
-                      </td>
-                      <td>
-                        <span 
-                          className="status-badge" 
-                          style={{ backgroundColor: work.status_color || '#6c757d' }}
-                        >
-                          {work.status_text || 'Beklemede'}
-                        </span>
-                      </td>
-                    </tr>
+                    />
                   ))}
                 </tbody>
               </table>
@@ -332,7 +250,7 @@ const Dashboard = () => {
           />
         </Modal>
 
-        {/* Delete Confirm Modal */}
+        {/* Confirm Modal */}
         <ConfirmModal
           isOpen={modals.confirmModal}
           onClose={() => {
@@ -349,5 +267,51 @@ const Dashboard = () => {
     </Layout>
   );
 };
+
+// Sub-components
+const StatCard = ({ icon, label, value, color }) => (
+  <div className="stat-card">
+    <div className={`stat-icon ${color}`}>{icon}</div>
+    <div className="stat-content">
+      <div className="stat-number">{value}</div>
+      <div className="stat-label">{label}</div>
+    </div>
+  </div>
+);
+
+const FilterButton = ({ active, onClick, label }) => (
+  <button 
+    className={`filter-btn ${active ? 'active' : ''}`}
+    onClick={onClick}
+  >
+    {label}
+  </button>
+);
+
+const WorkRow = ({ work, index, onClick }) => (
+  <tr className="work-row" onClick={onClick}>
+    <td>{index + 1}</td>
+    <td className="work-name">{work.name || '-'}</td>
+    <td>{work.category_name || '-'}</td>
+    <td>{work.price ? `${work.price} TL` : '-'}</td>
+    <td>{work.type_name || '-'}</td>
+    <td>{work.sales_channel_name || '-'}</td>
+    <td>
+      <span className="link-count">
+        {work.links && work.links.length > 0 ? (
+          <>🔗 {work.links.length}</>
+        ) : '-'}
+      </span>
+    </td>
+    <td>
+      <span 
+        className="status-badge" 
+        style={{ backgroundColor: work.status_color || '#6c757d' }}
+      >
+        {work.status_text || 'Beklemede'}
+      </span>
+    </td>
+  </tr>
+);
 
 export default Dashboard;

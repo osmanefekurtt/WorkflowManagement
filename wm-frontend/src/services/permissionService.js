@@ -1,14 +1,10 @@
-// src/services/permissionService.js
 import api from './api';
 
 const permissionService = {
   getMyWorkPermissions: async () => {
     try {
       const response = await api.get('/permissions/my-work-permissions/');
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return {};
+      return response.data.success ? response.data.data : {};
     } catch (error) {
       console.error('Yetkiler alınırken hata:', error);
       return {};
@@ -18,47 +14,41 @@ const permissionService = {
   getSystemPermissions: async () => {
     try {
       const response = await api.get('/permissions/my-permissions/');
+      
       if (response.data.success && response.data.data) {
-        // System permissions'ı çıkar
         const systemPerms = {};
-        response.data.data.permissions?.forEach(perm => {
-          if (perm.column_name === 'work_create' || perm.column_name === 'work_delete') {
+        const { permissions, user } = response.data.data;
+        
+        // Check superuser
+        if (user?.is_superuser) {
+          return { work_create: true, work_delete: true };
+        }
+        
+        // Extract system permissions
+        permissions?.forEach(perm => {
+          if (['work_create', 'work_delete'].includes(perm.column_name)) {
             systemPerms[perm.column_name] = perm.can_write || perm.permission === 'write';
           }
         });
         
-        // Eğer superuser ise tüm izinler true
-        if (response.data.data.user?.is_superuser) {
-          return {
-            work_create: true,
-            work_delete: true
-          };
-        }
-        
         return systemPerms;
       }
-      return {
-        work_create: false,
-        work_delete: false
-      };
+      
+      return { work_create: false, work_delete: false };
     } catch (error) {
       console.error('Sistem yetkileri alınırken hata:', error);
-      return {
-        work_create: false,
-        work_delete: false
-      };
+      return { work_create: false, work_delete: false };
     }
   },
   
-  // Yardımcı fonksiyonlar
+  // Helper functions
   canRead: (permissions, fieldName) => {
     const perm = permissions[fieldName];
     return perm === 'r' || perm === 'rw';
   },
   
   canWrite: (permissions, fieldName) => {
-    const perm = permissions[fieldName];
-    return perm === 'rw';
+    return permissions[fieldName] === 'rw';
   },
   
   hasPermission: (permissions, fieldName) => {

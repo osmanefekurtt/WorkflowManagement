@@ -1,12 +1,10 @@
-# permissions/models.py
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 
+
 class Role(models.Model):
-    """
-    Kullanıcılara atanabilecek roller
-    """
+    """Kullanıcılara atanabilecek roller"""
     name = models.CharField(max_length=100, unique=True, verbose_name='Rol Adı')
     description = models.TextField(blank=True, null=True, verbose_name='Açıklama')
     created = models.DateTimeField(auto_now_add=True, verbose_name='Oluşturulma Tarihi')
@@ -22,16 +20,14 @@ class Role(models.Model):
 
 
 class ColumnPermission(models.Model):
-    """
-    Work modelindeki kolonlar için yetki tanımları
-    """
+    """Work modelindeki kolonlar için yetki tanımları"""
+    
     PERMISSION_CHOICES = [
         ('none', 'Yetki Yok'),
         ('read', 'Sadece Okuma'),
         ('write', 'Okuma ve Yazma'),
     ]
     
-    # Work modelindeki tüm alanlar (status field'ı kaldırıldı)
     COLUMN_CHOICES = [
         ('name', 'İsim'),
         ('category', 'Kategori'),
@@ -44,8 +40,8 @@ class ColumnPermission(models.Model):
         ('confirm_date', 'Onay Tarihi'),
         ('printing_location', 'Baskı Lokasyonu'),
         ('printing_confirm', 'Baskı Onayı'),
-        ('printing_control', 'Baskı Kontrolü'),  # YENİ
-        ('printing_controller', 'Kontrolü Yapan Kişi'),  # YENİ
+        ('printing_control', 'Baskı Kontrolü'),
+        ('printing_controller', 'Kontrolü Yapan Kişi'),
         ('printing_start_date', 'Baskı Başlangıç Tarihi'),
         ('printing_end_date', 'Baskı Bitiş Tarihi'),
         ('mixed', 'Karışık'),
@@ -71,9 +67,8 @@ class ColumnPermission(models.Model):
 
 
 class SystemPermission(models.Model):
-    """
-    Sistem genelinde işlem izinleri
-    """
+    """Sistem genelinde işlem izinleri"""
+    
     PERMISSION_CHOICES = [
         ('work_create', 'İş Oluşturma'),
         ('work_delete', 'İş Silme'),
@@ -84,7 +79,8 @@ class SystemPermission(models.Model):
     granted = models.BooleanField(default=False, verbose_name='İzin Verildi mi?')
     
     def __str__(self):
-        return f"{self.role.name} - {self.get_permission_type_display()} - {'✓' if self.granted else '✗'}"
+        status = '✓' if self.granted else '✗'
+        return f"{self.role.name} - {self.get_permission_type_display()} - {status}"
     
     class Meta:
         verbose_name = 'Sistem İzni'
@@ -93,9 +89,7 @@ class SystemPermission(models.Model):
 
 
 class UserRole(models.Model):
-    """
-    Kullanıcı-Rol ilişkisi
-    """
+    """Kullanıcı-Rol ilişkisi"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_roles', verbose_name='Kullanıcı')
     role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name='role_users', verbose_name='Rol')
     assigned_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='assigned_roles', verbose_name='Atayan')
@@ -105,7 +99,6 @@ class UserRole(models.Model):
         return f"{self.user.username} - {self.role.name}"
     
     def clean(self):
-        # Aynı kullanıcıya aynı rol birden fazla kez atanamaz
         if UserRole.objects.filter(user=self.user, role=self.role).exclude(pk=self.pk).exists():
             raise ValidationError('Bu kullanıcıya bu rol zaten atanmış.')
     

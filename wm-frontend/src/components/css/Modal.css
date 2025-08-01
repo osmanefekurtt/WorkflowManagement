@@ -45,6 +45,7 @@
 /* Role modal için özel genişlik */
 .modal-content.role-modal {
   max-width: 1400px;
+  width: 60%;
 }
 
 @keyframes slideIn {

@@ -1,10 +1,11 @@
-# authentication/serializers.py
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.tokens import RefreshToken
 
+
 class LoginSerializer(serializers.Serializer):
+    """Kullanıcı giriş doğrulaması"""
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
     
@@ -12,36 +13,30 @@ class LoginSerializer(serializers.Serializer):
         username = data.get('username')
         password = data.get('password')
         
-        if username and password:
-            user = authenticate(username=username, password=password)
-            
-            if not user:
-                raise serializers.ValidationError('Kullanıcı adı veya şifre hatalı.')
-            
-            if not user.is_active:
-                raise serializers.ValidationError('Bu hesap aktif değil.')
-            
-            data['user'] = user
-            return data
-        else:
+        if not (username and password):
             raise serializers.ValidationError('Kullanıcı adı ve şifre gerekli.')
+        
+        user = authenticate(username=username, password=password)
+        
+        if not user:
+            raise serializers.ValidationError('Kullanıcı adı veya şifre hatalı.')
+        
+        if not user.is_active:
+            raise serializers.ValidationError('Bu hesap aktif değil.')
+        
+        data['user'] = user
+        return data
 
 
 class UserSerializer(serializers.ModelSerializer):
+    """Kullanıcı bilgileri"""
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 'is_staff')
 
 
-class LoginResponseSerializer(serializers.Serializer):
-    access_token = serializers.CharField()
-    refresh_token = serializers.CharField()
-    token_type = serializers.CharField()
-    expires_in = serializers.IntegerField()
-    user = UserSerializer()
-
-
 class RegisterSerializer(serializers.Serializer):
+    """Yeni kullanıcı kaydı"""
     username = serializers.CharField(max_length=150)
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
@@ -66,11 +61,4 @@ class RegisterSerializer(serializers.Serializer):
     
     def create(self, validated_data):
         validated_data.pop('re_password')
-        user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data['email'],
-            password=validated_data['password'],
-            first_name=validated_data['first_name'],
-            last_name=validated_data['last_name']
-        )
-        return user
+        return User.objects.create_user(**validated_data)

@@ -1,12 +1,11 @@
-// src/components/WorkForm.js
 import React, { useState, useEffect } from 'react';
 import { usePermissions, useDropdowns, useApp, useOnce } from '../hooks';
 import SearchableDropdown from './SearchableDropdown';
 import api from '../services/api';
-import './WorkForm.css';
+import './css/WorkForm.css';
 
 const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
-  const [formData, setFormData] = useState({
+  const initialFormData = {
     name: '',
     category: '',
     price: '',
@@ -18,8 +17,8 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
     confirm_date: '',
     printing_location: '',
     printing_confirm: false,
-    printing_control: false,  // Yeni
-    printing_controller: '',  // Yeni
+    printing_control: false,
+    printing_controller: '',
     printing_start_date: '',
     printing_end_date: '',
     mixed: '',
@@ -28,40 +27,33 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
     shipping_date: '',
     links: [],
     note: ''
-  });
+  };
 
-  // Designer dropdown için state
+  const [formData, setFormData] = useState(initialFormData);
   const [designers, setDesigners] = useState([]);
   const [designersLoading, setDesignersLoading] = useState(false);
-  
-  // Printing controller dropdown için state
   const [controllers, setControllers] = useState([]);
   const [controllersLoading, setControllersLoading] = useState(false);
-
-  // Yeni link ekleme için state
   const [newLink, setNewLink] = useState({ url: '', title: '', description: '' });
   const [linkError, setLinkError] = useState('');
-
-  // Context'ten dropdown verileri ve yetkiler
-  const { categories, workTypes, salesChannels, loading: dropdownsLoading } = useDropdowns();
-  const { workPermissions, canReadField, canWriteField, hasFieldPermission } = usePermissions();
-  const { actions } = useApp();
-  
-  // Orijinal veriyi sakla
   const [originalData, setOriginalData] = useState(null);
   const [loadingPermissions, setLoadingPermissions] = useState(true);
 
-  // Component mount olduğunda work permissions'ı yükle - sadece bir kere
+  const { categories, workTypes, salesChannels, loading: dropdownsLoading } = useDropdowns();
+  const { workPermissions, canReadField, canWriteField, hasFieldPermission } = usePermissions();
+  const { actions } = useApp();
+
+  // Load permissions once
   useOnce(() => {
     const loadPermissions = async () => {
       setLoadingPermissions(true);
       await actions.loadWorkPermissions();
       setLoadingPermissions(false);
     };
-    
     loadPermissions();
   });
 
+  // Initialize form data from work
   useEffect(() => {
     if (work) {
       const workData = {
@@ -72,8 +64,8 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
         sales_channel: work.sales_channel || '',
         designer: work.designer || '',
         printing_confirm: work.printing_confirm || false,
-        printing_control: work.printing_control || false,  // Yeni
-        printing_controller: work.printing_controller || '',  // Yeni
+        printing_control: work.printing_control || false,
+        printing_controller: work.printing_controller || '',
         mixed: work.mixed || false,
         stock_entry: work.stock_entry || false,
         links: work.links || [],
@@ -83,100 +75,59 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
     }
   }, [work]);
 
-  // Tasarımcı arama fonksiyonu
-  const searchDesigners = async (searchTerm) => {
-    setDesignersLoading(true);
+  // User search function
+  const searchUsers = async (searchTerm, setLoading, setUsers) => {
+    setLoading(true);
     try {
       const response = await api.get('/auth/users/search/', {
         params: { q: searchTerm, limit: 50 }
       });
       if (response.data.success) {
-        setDesigners(response.data.data.users || []);
+        setUsers(response.data.data.users || []);
       }
     } catch (error) {
-      console.error('Tasarımcı arama hatası:', error);
+      console.error('Kullanıcı arama hatası:', error);
     } finally {
-      setDesignersLoading(false);
+      setLoading(false);
     }
   };
 
-  // Kontrolü yapan kişi arama fonksiyonu
-  const searchControllers = async (searchTerm) => {
-    setControllersLoading(true);
-    try {
-      const response = await api.get('/auth/users/search/', {
-        params: { q: searchTerm, limit: 50 }
-      });
-      if (response.data.success) {
-        setControllers(response.data.data.users || []);
-      }
-    } catch (error) {
-      console.error('Kontrolör arama hatası:', error);
-    } finally {
-      setControllersLoading(false);
-    }
-  };
+  const searchDesigners = searchTerm => searchUsers(searchTerm, setDesignersLoading, setDesigners);
+  const searchControllers = searchTerm => searchUsers(searchTerm, setControllersLoading, setControllers);
 
-  const handleChange = (e) => {
+  const handleChange = e => {
     const { name, value, type, checked } = e.target;
     
-    // Yazma yetkisi kontrolü
-    if (!canWriteField(name)) {
-      return;
-    }
+    if (!canWriteField(name)) return;
     
-    // Baskı kontrolü özel işlemi
-    if (name === 'printing_control') {
-      if (!checked) {
-        // Baskı kontrolü kapatılırsa kontrolörü temizle
-        setFormData(prev => ({
-          ...prev,
-          printing_control: false,
-          printing_controller: ''
-        }));
-        return;
-      }
-    }
-    
-    // Mixed alanı artık text olduğu için checkbox kontrolünü kaldır
-    setFormData(prev => ({
+    // Special handling for printing_control
+    if (name === 'printing_control' && !checked) {
+      setFormData(prev => ({
         ...prev,
-        [name]: type === 'checkbox' ? checked : value
-    }));
-  };
-
-  const handleDesignerChange = (designerId) => {
-    if (!canWriteField('designer')) {
+        printing_control: false,
+        printing_controller: ''
+      }));
       return;
     }
     
     setFormData(prev => ({
       ...prev,
-      designer: designerId
+      [name]: type === 'checkbox' ? checked : value
     }));
   };
 
-  const handleControllerChange = (controllerId) => {
-    if (!canWriteField('printing_controller') || !formData.printing_control) {
-      return;
-    }
-    
-    setFormData(prev => ({
-      ...prev,
-      printing_controller: controllerId
-    }));
+  const handleDropdownChange = (field, value) => {
+    if (!canWriteField(field)) return;
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleNewLinkChange = (e) => {
+  const handleNewLinkChange = e => {
     const { name, value } = e.target;
-    setNewLink(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setNewLink(prev => ({ ...prev, [name]: value }));
     setLinkError('');
   };
 
-  const validateUrl = (url) => {
+  const validateUrl = url => {
     try {
       new URL(url);
       return true;
@@ -186,9 +137,7 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
   };
 
   const handleAddLink = () => {
-    if (!canWriteField('links')) {
-      return;
-    }
+    if (!canWriteField('links')) return;
 
     if (!newLink.url) {
       setLinkError('URL alanı zorunludur');
@@ -200,7 +149,6 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
       return;
     }
 
-    // Aynı URL daha önce eklenmişse uyar
     if (formData.links.some(link => link.url === newLink.url)) {
       setLinkError('Bu bağlantı zaten eklenmiş');
       return;
@@ -211,66 +159,54 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
       links: [...prev.links, { ...newLink }]
     }));
 
-    // Formu temizle
     setNewLink({ url: '', title: '', description: '' });
     setLinkError('');
   };
 
-  const handleRemoveLink = (index) => {
-    if (!canWriteField('links')) {
-      return;
-    }
-
+  const handleRemoveLink = index => {
+    if (!canWriteField('links')) return;
+    
     setFormData(prev => ({
       ...prev,
       links: prev.links.filter((_, i) => i !== index)
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = e => {
     e.preventDefault();
     
-    let dataToSend;
+    const dataToSend = isNew 
+      ? getNewWorkData() 
+      : getUpdatedWorkData();
     
-    if (isNew) {
-      dataToSend = {};
-      Object.keys(formData).forEach(key => {
-        if (!canWriteField(key)) {
-          return;
-        }
-        
-        if (formData[key] === '') {
-          dataToSend[key] = null;
-        } else {
-          dataToSend[key] = formData[key];
-        }
-      });
-    } else {
-      dataToSend = {};
-      Object.keys(formData).forEach(key => {
-        if (['id', 'created', 'updated', 'link', 'link_title', 'printing_control_date'].includes(key)) {
-          return;
-        }
-        
-        if (!canWriteField(key)) {
-          return;
-        }
-        
-        if (originalData && JSON.stringify(formData[key]) !== JSON.stringify(originalData[key])) {
-          if (formData[key] === '') {
-            dataToSend[key] = null;
-          } else {
-            dataToSend[key] = formData[key];
-          }
-        }
-      });
-      
-      if (Object.keys(dataToSend).length === 0) {
-        return;
-      }
-    }
+    if (!isNew && Object.keys(dataToSend).length === 0) return;
     
     onSave(dataToSend);
+  };
+
+  const getNewWorkData = () => {
+    const data = {};
+    Object.keys(formData).forEach(key => {
+      if (canWriteField(key)) {
+        data[key] = formData[key] === '' ? null : formData[key];
+      }
+    });
+    return data;
+  };
+
+  const getUpdatedWorkData = () => {
+    const data = {};
+    const excludedFields = ['id', 'created', 'updated', 'link', 'link_title', 'printing_control_date'];
+    
+    Object.keys(formData).forEach(key => {
+      if (!excludedFields.includes(key) && canWriteField(key)) {
+        if (originalData && JSON.stringify(formData[key]) !== JSON.stringify(originalData[key])) {
+          data[key] = formData[key] === '' ? null : formData[key];
+        }
+      }
+    });
+    
+    return data;
   };
 
   const handleDelete = () => {
@@ -279,17 +215,61 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
     }
   };
 
-  const isFieldVisible = (fieldName) => {
-    return hasFieldPermission(fieldName);
-  };
-
-  const isFieldEditable = (fieldName) => {
-    return canWriteField(fieldName);
-  };
-
   if (loadingPermissions || dropdownsLoading) {
     return <div className="loading">Yükleniyor...</div>;
   }
+
+  const renderFormField = (fieldName, label, renderInput) => {
+    if (!hasFieldPermission(fieldName)) return null;
+    
+    return (
+      <div className="form-group" key={fieldName}>
+        <label>{label}{fieldName === 'name' && ' *'}</label>
+        {renderInput(canWriteField(fieldName))}
+      </div>
+    );
+  };
+
+  const renderInput = (name, type = 'text', additionalProps = {}) => isEditable => (
+    <input
+      type={type}
+      name={name}
+      value={formData[name]}
+      onChange={handleChange}
+      disabled={!isEditable}
+      {...additionalProps}
+    />
+  );
+
+  const renderSelect = (name, options) => isEditable => (
+    <select
+      name={name}
+      value={formData[name]}
+      onChange={handleChange}
+      disabled={!isEditable}
+    >
+      <option value="">Seçiniz</option>
+      {options.map(opt => (
+        <option key={opt.id} value={opt.id}>
+          {opt.name}
+        </option>
+      ))}
+    </select>
+  );
+
+  const renderCheckbox = (name, label) => isEditable => (
+    <div className="form-checkbox">
+      <input
+        type="checkbox"
+        id={name}
+        name={name}
+        checked={formData[name]}
+        onChange={handleChange}
+        disabled={!isEditable}
+      />
+      <label htmlFor={name}>{label}</label>
+    </div>
+  );
 
   return (
     <form onSubmit={handleSubmit} className="work-form">
@@ -298,93 +278,16 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
         <div className="form-section">
           <h3>Temel Bilgiler</h3>
           
-          {isFieldVisible('name') && (
-            <div className="form-group">
-              <label>İş İsmi *</label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                disabled={!isFieldEditable('name')}
-                required={isFieldEditable('name')}
-              />
-            </div>
-          )}
+          {renderFormField('name', 'İş İsmi', renderInput('name', 'text', { required: canWriteField('name') }))}
 
           <div className="form-row">
-            {isFieldVisible('category') && (
-              <div className="form-group">
-                <label>Kategori</label>
-                <select
-                  name="category"
-                  value={formData.category}
-                  onChange={handleChange}
-                  disabled={!isFieldEditable('category')}
-                >
-                  <option value="">Seçiniz</option>
-                  {categories.map(cat => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {isFieldVisible('price') && (
-              <div className="form-group">
-                <label>Fiyat</label>
-                <input
-                  type="number"
-                  name="price"
-                  value={formData.price}
-                  onChange={handleChange}
-                  disabled={!isFieldEditable('price')}
-                  step="0.01"
-                />
-              </div>
-            )}
+            {renderFormField('category', 'Kategori', renderSelect('category', categories))}
+            {renderFormField('price', 'Fiyat', renderInput('price', 'number', { step: '0.01' }))}
           </div>
 
           <div className="form-row">
-            {isFieldVisible('type') && (
-              <div className="form-group">
-                <label>Tip</label>
-                <select
-                  name="type"
-                  value={formData.type}
-                  onChange={handleChange}
-                  disabled={!isFieldEditable('type')}
-                >
-                  <option value="">Seçiniz</option>
-                  {workTypes.map(type => (
-                    <option key={type.id} value={type.id}>
-                      {type.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {isFieldVisible('sales_channel') && (
-              <div className="form-group">
-                <label>Satış Kanalı</label>
-                <select
-                  name="sales_channel"
-                  value={formData.sales_channel}
-                  onChange={handleChange}
-                  disabled={!isFieldEditable('sales_channel')}
-                >
-                  <option value="">Seçiniz</option>
-                  {salesChannels.map(channel => (
-                    <option key={channel.id} value={channel.id}>
-                      {channel.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            {renderFormField('type', 'Tip', renderSelect('type', workTypes))}
+            {renderFormField('sales_channel', 'Satış Kanalı', renderSelect('sales_channel', salesChannels))}
           </div>
         </div>
 
@@ -392,124 +295,54 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
         <div className="form-section">
           <h3>Tasarım Bilgileri</h3>
           
-          {isFieldVisible('designer') && (
-            <div className="form-group">
-              <label>Tasarımcı</label>
-              <SearchableDropdown
-                value={formData.designer}
-                onChange={handleDesignerChange}
-                onSearch={searchDesigners}
-                options={designers}
-                placeholder="Tasarımcı seçiniz..."
-                searchPlaceholder="İsim veya kullanıcı adı ile ara..."
-                disabled={!isFieldEditable('designer')}
-                loading={designersLoading}
-                displayKey="display_name"
-                valueKey="id"
-                noResultsText="Kullanıcı bulunamadı"
-                loadOnOpen={true}
-              />
-            </div>
-          )}
+          {renderFormField('designer', 'Tasarımcı', isEditable => (
+            <SearchableDropdown
+              value={formData.designer}
+              onChange={value => handleDropdownChange('designer', value)}
+              onSearch={searchDesigners}
+              options={designers}
+              placeholder="Tasarımcı seçiniz..."
+              searchPlaceholder="İsim veya kullanıcı adı ile ara..."
+              disabled={!isEditable}
+              loading={designersLoading}
+              displayKey="display_name"
+              valueKey="id"
+              noResultsText="Kullanıcı bulunamadı"
+              loadOnOpen={true}
+            />
+          ))}
           
           <div className="form-row">
-            {isFieldVisible('design_start_date') && (
-              <div className="form-group">
-                <label>Tasarım Başlangıç</label>
-                <input
-                  type="date"
-                  name="design_start_date"
-                  value={formData.design_start_date || ''}
-                  onChange={handleChange}
-                  disabled={!isFieldEditable('design_start_date')}
-                />
-              </div>
-            )}
-
-            {isFieldVisible('design_end_date') && (
-              <div className="form-group">
-                <label>Tasarım Bitiş</label>
-                <input
-                  type="date"
-                  name="design_end_date"
-                  value={formData.design_end_date || ''}
-                  onChange={handleChange}
-                  disabled={!isFieldEditable('design_end_date')}
-                />
-              </div>
-            )}
+            {renderFormField('design_start_date', 'Tasarım Başlangıç', renderInput('design_start_date', 'date'))}
+            {renderFormField('design_end_date', 'Tasarım Bitiş', renderInput('design_end_date', 'date'))}
           </div>
 
-          {isFieldVisible('confirm_date') && (
-            <div className="form-group">
-              <label>Onay Tarihi</label>
-              <input
-                type="date"
-                name="confirm_date"
-                value={formData.confirm_date || ''}
-                onChange={handleChange}
-                disabled={!isFieldEditable('confirm_date')}
-              />
-            </div>
-          )}
+          {renderFormField('confirm_date', 'Onay Tarihi', renderInput('confirm_date', 'date'))}
         </div>
 
         {/* Baskı Bilgileri */}
         <div className="form-section">
           <h3>Baskı Bilgileri</h3>
           
-          {isFieldVisible('printing_location') && (
-            <div className="form-group">
-              <label>Baskı Lokasyonu</label>
-              <input
-                type="text"
-                name="printing_location"
-                value={formData.printing_location}
-                onChange={handleChange}
-                disabled={!isFieldEditable('printing_location')}
-              />
-            </div>
-          )}
+          {renderFormField('printing_location', 'Baskı Lokasyonu', renderInput('printing_location'))}
+          
+          {hasFieldPermission('printing_confirm') && renderCheckbox('printing_confirm', 'Baskı Onayı')(canWriteField('printing_confirm'))}
 
-          {isFieldVisible('printing_confirm') && (
-            <div className="form-checkbox">
-              <input
-                type="checkbox"
-                id="printing_confirm"
-                name="printing_confirm"
-                checked={formData.printing_confirm}
-                onChange={handleChange}
-                disabled={!isFieldEditable('printing_confirm')}
-              />
-              <label htmlFor="printing_confirm">Baskı Onayı</label>
-            </div>
-          )}
-
-          {/* Baskı Kontrolü - YENİ */}
-          {isFieldVisible('printing_control') && (
+          {/* Baskı Kontrolü */}
+          {hasFieldPermission('printing_control') && (
             <div className="printing-control-container">
-              <div className="form-checkbox">
-                <input
-                  type="checkbox"
-                  id="printing_control"
-                  name="printing_control"
-                  checked={formData.printing_control}
-                  onChange={handleChange}
-                  disabled={!isFieldEditable('printing_control')}
-                />
-                <label htmlFor="printing_control">Baskı Kontrolü</label>
-              </div>
+              {renderCheckbox('printing_control', 'Baskı Kontrolü')(canWriteField('printing_control'))}
               
-              {formData.printing_control && isFieldVisible('printing_controller') && (
+              {formData.printing_control && hasFieldPermission('printing_controller') && (
                 <div className="controller-dropdown">
                   <SearchableDropdown
                     value={formData.printing_controller}
-                    onChange={handleControllerChange}
+                    onChange={value => handleDropdownChange('printing_controller', value)}
                     onSearch={searchControllers}
                     options={controllers}
                     placeholder="Kontrolü yapan kişiyi seçiniz..."
                     searchPlaceholder="İsim veya kullanıcı adı ile ara..."
-                    disabled={!isFieldEditable('printing_controller')}
+                    disabled={!canWriteField('printing_controller')}
                     loading={controllersLoading}
                     displayKey="display_name"
                     valueKey="id"
@@ -527,31 +360,8 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
           )}
 
           <div className="form-row">
-            {isFieldVisible('printing_start_date') && (
-              <div className="form-group">
-                <label>Baskı Başlangıç</label>
-                <input
-                  type="date"
-                  name="printing_start_date"
-                  value={formData.printing_start_date || ''}
-                  onChange={handleChange}
-                  disabled={!isFieldEditable('printing_start_date')}
-                />
-              </div>
-            )}
-
-            {isFieldVisible('printing_end_date') && (
-              <div className="form-group">
-                <label>Baskı Bitiş</label>
-                <input
-                  type="date"
-                  name="printing_end_date"
-                  value={formData.printing_end_date || ''}
-                  onChange={handleChange}
-                  disabled={!isFieldEditable('printing_end_date')}
-                />
-              </div>
-            )}
+            {renderFormField('printing_start_date', 'Baskı Başlangıç', renderInput('printing_start_date', 'date'))}
+            {renderFormField('printing_end_date', 'Baskı Bitiş', renderInput('printing_end_date', 'date'))}
           </div>
         </div>
 
@@ -559,69 +369,30 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
         <div className="form-section">
           <h3>Paketleme ve Sevkiyat</h3>
           
-          {isFieldVisible('mixed') && (
-            <div className="form-group">
-                <label>Karışık</label>
-                <input
-                    type="text"
-                    name="mixed"
-                    value={formData.mixed}
-                    onChange={handleChange}
-                    disabled={!isFieldEditable('mixed')}
-                    placeholder="Karışık bilgisi giriniz..."
-                />
-            </div>
-          )}
+          {renderFormField('mixed', 'Karışık', isEditable => (
+            <input
+              type="text"
+              name="mixed"
+              value={formData.mixed}
+              onChange={handleChange}
+              disabled={!isEditable}
+              placeholder="Karışık bilgisi giriniz..."
+            />
+          ))}
 
           <div className="form-row">
-            {isFieldVisible('packaging_date') && (
-              <div className="form-group">
-                <label>Paketleme Tarihi</label>
-                <input
-                  type="date"
-                  name="packaging_date"
-                  value={formData.packaging_date || ''}
-                  onChange={handleChange}
-                  disabled={!isFieldEditable('packaging_date')}
-                />
-              </div>
-            )}
-
-            {isFieldVisible('shipping_date') && (
-              <div className="form-group">
-                <label>Sevkiyat Tarihi</label>
-                <input
-                  type="date"
-                  name="shipping_date"
-                  value={formData.shipping_date || ''}
-                  onChange={handleChange}
-                  disabled={!isFieldEditable('shipping_date')}
-                />
-              </div>
-            )}
+            {renderFormField('packaging_date', 'Paketleme Tarihi', renderInput('packaging_date', 'date'))}
+            {renderFormField('shipping_date', 'Sevkiyat Tarihi', renderInput('shipping_date', 'date'))}
           </div>
 
-          {isFieldVisible('stock_entry') && (
-            <div className="form-checkbox">
-              <input
-                type="checkbox"
-                id="stock_entry"
-                name="stock_entry"
-                checked={formData.stock_entry}
-                onChange={handleChange}
-                disabled={!isFieldEditable('stock_entry')}
-              />
-              <label htmlFor="stock_entry">Stok Girişi</label>
-            </div>
-          )}
+          {hasFieldPermission('stock_entry') && renderCheckbox('stock_entry', 'Stok Girişi')(canWriteField('stock_entry'))}
         </div>
 
         {/* Bağlantılar */}
-        {isFieldVisible('links') && (
+        {hasFieldPermission('links') && (
           <div className="form-section full-width">
             <h3>Bağlantılar</h3>
             
-            {/* Mevcut Bağlantılar */}
             {formData.links && formData.links.length > 0 && (
               <div className="links-list">
                 {formData.links.map((link, index) => (
@@ -640,7 +411,7 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
                         </span>
                       )}
                     </div>
-                    {isFieldEditable('links') && (
+                    {canWriteField('links') && (
                       <button
                         type="button"
                         className="link-remove-btn"
@@ -655,8 +426,7 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
               </div>
             )}
 
-            {/* Yeni Bağlantı Ekleme Formu */}
-            {isFieldEditable('links') && (
+            {canWriteField('links') && (
               <div className="add-link-form">
                 <h4>Yeni Bağlantı Ekle</h4>
                 {linkError && <div className="link-error">{linkError}</div>}
@@ -699,20 +469,15 @@ const WorkForm = ({ work, onSave, onCancel, onDelete, isNew = false }) => {
         )}
 
         {/* Notlar */}
-        {isFieldVisible('note') && (
-          <div className="form-section full-width">
-            <h3>Notlar</h3>
-            <div className="form-group">
-              <textarea
-                name="note"
-                value={formData.note}
-                onChange={handleChange}
-                disabled={!isFieldEditable('note')}
-                rows="4"
-              />
-            </div>
-          </div>
-        )}
+        {renderFormField('note', 'Notlar', isEditable => (
+          <textarea
+            name="note"
+            value={formData.note}
+            onChange={handleChange}
+            disabled={!isEditable}
+            rows="4"
+          />
+        ))}
       </div>
 
       <div className="form-actions">

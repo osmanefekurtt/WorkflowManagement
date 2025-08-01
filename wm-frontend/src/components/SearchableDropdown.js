@@ -1,6 +1,6 @@
 // src/components/SearchableDropdown.js
 import React, { useState, useEffect, useRef } from 'react';
-import './SearchableDropdown.css';
+import './css/SearchableDropdown.css';
 
 const SearchableDropdown = ({ 
   value, 
